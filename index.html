@@ -1,0 +1,296 @@
+<!doctype html>
+<html class="no-js" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!--  Card list style  -->
+    <style>
+        body, h1, h2, h3, a {
+            font-weight: normal;
+            line-height: 1.5em;
+        }
+
+        tr, td {
+            padding: 0 1px;
+            margin: 0 !important;
+        }
+
+        h3 {
+            font-size: 13px;
+            margin: 2px 0;
+            padding: 0 5px;
+            font-weight: bold;
+        }
+
+        ul {
+            margin: 5px;
+            padding: 2px;
+            font-size: 8px;
+        }
+
+        ul li {
+            font-size: 10px;
+        }
+
+        code {
+            font-size: 9px;
+        }
+
+        div {
+            margin: 0;
+            text-align: justify;
+            padding: 1px 0 1px 8px;
+            line-height: 1.5em;
+        }
+
+        a:hover {
+            text-decoration: none !important;
+        }
+
+        a:link {
+            text-decoration: none !important;
+        }
+
+        a {
+            text-decoration: none !important;
+        }
+
+        a:active {
+            text-decoration: none !important;
+        }
+
+        table {
+            margin: 5px 0;
+        }
+
+        .bullet {
+            color: #FEC700;
+        }
+
+        .ok_import {
+            color: #89DC9F;
+        !important;
+            font-weight: bold;
+        }
+
+        .warn_msg {
+            color: #FEC700;
+        !important;
+            font-weight: bold;
+        }
+
+        .ko_noimport {
+            color: #FF977A;
+        !important;
+            font-weight: bold;
+        }
+
+        .comment {
+            font-style: italic
+        }
+
+        .deckname {
+            background-color: #332200;
+            color: #ffffff;
+        }
+
+        .section {
+            font-weight: bold;
+            background-color: #DDDDDD;
+            color: #000000;
+        }
+
+        .cardtype {
+            font-weight: bold;
+            /*background-color: #FFCC66;*/
+            color: #000000;
+        }
+
+        .cmc {
+            font-weight: bold;
+            /*background-color: #CCCCCC;*/
+            color: #000000;
+        }
+
+        .rarity {
+            font-weight: bold;
+            background-color: #F1B27E;
+            color: #000000;
+        }
+
+        .table-list {
+            column-count: 2;
+            height: 100%;
+        }
+
+    </style>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css"
+          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+          crossorigin="anonymous">
+    <link href="//cdn.jsdelivr.net/npm/mana-font@latest/css/mana.css" rel="stylesheet"
+          type="text/css"/>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+            integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js"
+            integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js"
+            integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+            crossorigin="anonymous"></script>
+
+    <!-- PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2022.09.1/pyscript.css"/>
+    <script defer src="https://pyscript.net/releases/2022.09.1/pyscript.js"></script>
+
+    <py-config>
+        autoclose_loader = true
+        packages = ["./PyTrie-0.4.0-py3-none-any.whl"]
+        paths = ["./data.py", "./deck_parser.py"]
+
+        [[runtimes]]
+        src = "https://cdn.jsdelivr.net/pyodide/v0.21.3/full/pyodide.js"
+        name = "pyodide-0.21.3"
+        lang = "python"
+    </py-config>
+
+</head>
+
+<body>
+
+<py-script>
+        from deck_parser import DeckParser, Deck
+        from js import document, console
+        from pyodide.ffi import create_proxy
+        from pyodide.http import pyfetch
+        from data import ScryfallDB, SCRYFALL_DEFAULT_CARDS_URL
+
+        CARDS_DB = None
+
+        async def init_db(*args):
+            global CARDS_DB
+            if CARDS_DB is None:
+                console.log("Cards DB INIT.")
+                response = await pyfetch(SCRYFALL_DEFAULT_CARDS_URL, method="GET")
+                json_data = await response.json()
+                CARDS_DB = ScryfallDB(json_db=json_data)
+                console.log("Cards DB INIT Completed.")
+            return CARDS_DB
+
+        async def parse_deck_list(grouping: str):
+            cards_db = await init_db()
+            deck_parser = DeckParser(cards_db=cards_db)
+            card_list = document.getElementById("card_list_entry").value
+            card_list = [l.strip() for l in card_list.split("\n")]
+            tokens = deck_parser.parse_card_list(card_list)
+            if tokens:
+                deck = Deck(tokens=tokens)
+                display_tokens = deck.deck_list(grouping=grouping)
+                rows = ""
+                for token in display_tokens:
+                    rows += token.to_html
+
+                document.getElementById("card_list_parsed").innerHTML = rows
+
+                if not deck.is_valid:
+                    errors = deck.validate()
+                    error_list = ""
+                    for error in errors:
+                        error_list += error.to_html()
+                    document.getElementById("messages").innerHTML = error_list
+                    document.getElementById("col-messages").style.display = "inline"
+                else:
+                    document.getElementById("col-messages").style.display = "none"
+
+            else:
+                document.getElementById("card_list_parsed").innerHTML = ""
+                document.getElementById("col-messages").style.display = "none"
+
+        @create_proxy
+        async def parse_deck_no_group(*args, **kwargs):
+            await parse_deck_list(grouping=Deck.NOGROUP)
+
+        @create_proxy
+        async def parse_deck_group_colour(*args, **kwargs):
+            await parse_deck_list(grouping=Deck.COLOUR)
+
+        @create_proxy
+        async def parse_deck_group_rarity(*args, **kwargs):
+            await parse_deck_list(grouping=Deck.RARITY)
+
+        @create_proxy
+        async def parse_deck_group_cmc(*args, **kwargs):
+            await parse_deck_list(grouping=Deck.CMC)
+
+        @create_proxy
+        async def parse_deck_group_type(*args, **kwargs):
+            await parse_deck_list(grouping=Deck.SPELL)
+
+        @create_proxy
+        async def parse_deck_group_type_extended(*args, **kwargs):
+            return parse_deck_list(grouping=Deck.TYPE)
+
+        init_cards_db = create_proxy(init_db)
+
+        document.getElementById("card_list_entry").addEventListener("focus", init_cards_db)
+        document.getElementById("card_list_entry").addEventListener("keypress", parse_deck_no_group)
+        document.getElementById("card_list_entry").addEventListener("change", parse_deck_no_group)
+
+        # Deck Organiser Buttons
+        document.getElementById("nogroup").addEventListener("click", parse_deck_no_group)
+        document.getElementById("color").addEventListener("click", parse_deck_group_colour)
+        document.getElementById("rarity").addEventListener("click", parse_deck_group_rarity)
+        document.getElementById("cmc").addEventListener("click", parse_deck_group_cmc)
+        document.getElementById("spell").addEventListener("click", parse_deck_group_type)
+        document.getElementById("card_type").addEventListener("click",
+                                                              parse_deck_group_type_extended)
+</py-script>
+
+<div class="container">
+    <div class="row">
+        <!--        <div class="col-md-12">-->
+        <div class="col-xl-4">
+            <h4><span class="badge badge-info">Deck List</span></h4>
+            <textarea id="card_list_entry" rows="30" cols="35" style="width: 100%"></textarea>
+        </div>
+        <div class="col-xl-8">
+            <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="nogroup">No Group</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="color">Colour</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="rarity">Rarity</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="cmc">CMC</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="spell">Spell</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="card_type">Card Type</a>
+            </div>
+            <div class="table-list" style="margin-top: 10px;">
+                <table style="width: 100%" class="table table-sm table-responsive-sm">
+                    <tbody id="card_list_parsed"></tbody>
+                </table>
+            </div>
+        </div>
+        <!--        </div>-->
+    </div>
+    <div class="row">
+        <div class="col" id="col-messages" style="display: none">
+            <div id="messages" style="width: 100%">
+
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div id="target">
+
+</div>
+
+
+</body>
+
+</html>
