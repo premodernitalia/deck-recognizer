@@ -1118,7 +1118,7 @@ class DeckParser:
                 # we just need to be sure about collector number (if any) and if that card can
                 # be actually found in the requested set.
                 # IOW: we should account for wrong request e.g. Counterspell | FEM
-
+                matched_card = None
                 if collector_number:
                     try:
                         matched_card = next(
@@ -1130,7 +1130,8 @@ class DeckParser:
                         )
                     except StopIteration:
                         matched_card = None
-                elif art_index:
+
+                if art_index:
                     try:
                         matched_card = next(
                             self._db.lookup(
@@ -1141,7 +1142,8 @@ class DeckParser:
                         )
                     except StopIteration:
                         matched_card = None
-                else:
+
+                if not matched_card:
                     try:
                         matched_card = next(
                             self._db.lookup(
@@ -1408,4 +1410,4 @@ if __name__ == "__main__":
 
     cards = ScryfallDB(db)
     parser = DeckParser(cards)
-    parser.parse_card_list(["20 Island [USG]"])
+    parser.parse_card_list(["20 Island [USG] 2"])
