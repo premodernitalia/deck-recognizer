@@ -1133,7 +1133,7 @@ class DeckParser:
                     except StopIteration:
                         matched_card = None
 
-                if art_index:
+                if not matched_card and art_index:
                     try:
                         matched_card = next(
                             self._db.lookup(
@@ -1412,4 +1412,4 @@ if __name__ == "__main__":
 
     cards = ScryfallDB(db)
     parser = DeckParser(cards)
-    parser.parse_card_list(["20 Island [MMQ] (F)"])
+    parser.parse_card_list(["17 Island (mir) 336"])
