@@ -6,7 +6,8 @@ from datetime import date, datetime
 
 # ScryfallDB
 from typing import Iterable, Generator, Sequence, Optional
-from pytrie import StringTrie as Trie
+
+# from pytrie import StringTrie as Trie
 
 # -----
 # Cards
@@ -317,7 +318,7 @@ class ScryfallDB:
         set_recode_map: dict[str, str] = SET_RECODE_MAP,
     ):
         self._db = json_db
-        self._cards_map = Trie()
+        self._cards_map = dict()  # Trie()
         self._load_cards_from_db()
         self._mtg_sets_map = self._init_mtg_sets_map()
         self._preferred_sets = preferred_sets
@@ -463,7 +464,8 @@ class ScryfallDB:
         if is_card:
             if card_name.endswith("*"):  # prefix search
                 db_key = self.make_dbentry(card_name.replace("*", "").strip())
-                entries = chain.from_iterable(self._cards_map.itervalues(prefix=db_key))
+                # entries = chain.from_iterable(self._cards_map.itervalues(prefix=db_key))
+                entries = chain.from_iterable(self._cards_map.values())
             else:
                 db_key = self.make_dbentry(card_name)
                 entries = self._cards_map.get(db_key, tuple())
