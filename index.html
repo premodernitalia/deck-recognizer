@@ -189,14 +189,16 @@
             card_list = document.getElementById("card_list_entry").value
             card_list = [l.strip() for l in card_list.split("\n")]
             tokens = deck_parser.parse_card_list(card_list)
-            if tokens:
-                deck = Deck(tokens=tokens)
-                display_tokens = deck.deck_list(grouping=grouping)
+            deck = Deck(tokens=tokens)
+            display_tokens = deck.deck_list(grouping=grouping)
+            if display_tokens:
                 rows = ""
                 for token in display_tokens:
                     rows += token.to_html
 
                 document.getElementById("card_list_parsed").innerHTML = rows
+                document.getElementById("card_list_parsed").style.display = "table"
+                document.getElementById("instructions").style.display = "none"
 
                 if not deck.is_valid:
                     errors = deck.validate()
@@ -207,10 +209,11 @@
                     document.getElementById("col-messages").style.display = "inline"
                 else:
                     document.getElementById("col-messages").style.display = "none"
-
             else:
                 document.getElementById("card_list_parsed").innerHTML = ""
                 document.getElementById("col-messages").style.display = "none"
+                document.getElementById("card_list_parsed").style.display = "none"
+                document.getElementById("instructions").style.display = "block"
 
         @create_proxy
         async def parse_deck_no_group(*args, **kwargs):
@@ -256,20 +259,63 @@
     <div class="row">
         <!--        <div class="col-md-12">-->
         <div class="col-xl-4">
-            <h4><span class="badge badge-info">Deck List</span></h4>
+            <h4><span class="badge badge-info">Card List</span></h4>
             <textarea id="card_list_entry" rows="30" cols="35" style="width: 100%"></textarea>
         </div>
         <div class="col-xl-8">
             <div class="btn-group btn-group-toggle" data-toggle="buttons">
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="nogroup">No Group</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="color">Colour</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="rarity">Rarity</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="cmc">CMC</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="spell">Spell</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true" id="card_type">Card Type</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
+                   id="nogroup">No Group</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
+                   id="color">Colour</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
+                   id="rarity">Rarity</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
+                   id="cmc">CMC</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
+                   id="spell">Spell</a>
+                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
+                   id="card_type">Card Type</a>
             </div>
             <div class="table-list" style="margin-top: 10px;">
-                <table style="width: 100%" class="table table-sm table-responsive-sm">
+                <div id="instructions">
+                    <h3>Quick Instructions</h3>
+                    <div>To start using the Deck Importer just type or paste the names of the cards
+                        you want in the Card List (one per line). The Card list also supports
+                        a full deck in one of the most popular M:TG formats.
+                        Several M:TG deck formats are supported: MTG Arena; MTGO, XMage,
+                        MTG Goldfish (all export); TappedOut (all export, but CSV);
+                        DeckStats.net; ".dec" files.
+                        <br>
+                        Each line in the Card list is processed immediately, and any recognized
+                        entry will appear in the Deck table.
+                    </div>
+                    <h4>Examples</h4>
+                    <div><p><code class="bullet">10x Islands+ MIR 2</code>: 10 FOIL "Island" from
+                        Set "Mirage", Art Index 2.</p>
+                        <p><code class="bullet">4 Darksteel Citadel (M15) 242</code>: 4 "Darksteel
+                            Citadel" from "M15", Collector Nr. "242".<br><br> This is an exemplar
+                            entry in MTGArena format as exported by TappedOut.</p>
+                        <p><code class="bullet">18 Forest &lt;348&gt; [TE] (F)</code>: 18 FOIL
+                            "Forest" from Tempest (<code>TE</code>), Collector Nr. "348".<br>
+                            <br> This is an exemplar entry in MTGArena deck format as exported
+                            by MTGGoldfish - also using the set code of MTGO for Tempest set.
+                            The "(F)" at the end of the line denotes a foil card,
+                            and the Collector Number in angular
+                            brackets is is used to select a specific Card Art.
+                        </p>
+                        <p><code class="bullet">4x TMP|Counterspell</code>: 4 copies of
+                            "Counterspell" from "Tempest".<br><br> In this entry, the Set code is
+                            specified before the card name using the (optional) pipe
+                            separator.Alternative valid separators for set codes are braces,
+                            brackets, and parenthesis.</p>
+                        <p><code class="bullet">SB: 2 [M19:28] Mighty Leap</code>: 2 copies of
+                            "Mighty Leap" from "M19", Collector Nr. "28" to be added in "Sideboard".
+                        </p>
+                    </div>
+                </div>
+                <table style="width: 100%" class="table table-sm table-responsive-sm"
+                       style="display: none">
                     <tbody id="card_list_parsed"></tbody>
                 </table>
             </div>
