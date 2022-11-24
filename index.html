@@ -171,6 +171,8 @@
         from pyodide.ffi import create_proxy
         from pyodide.http import pyfetch
         from data import ScryfallDB, SCRYFALL_DEFAULT_CARDS_URL
+        import bz2
+        import json
 
         CARDS_DB = None
 
@@ -179,7 +181,9 @@
             if CARDS_DB is None:
                 console.log("Cards DB INIT.")
                 response = await pyfetch(SCRYFALL_DEFAULT_CARDS_URL, method="GET")
-                json_data = await response.json()
+                bz_data = await response.memoryview()
+                file = bz2.decompress(bz_data)
+                json_data = json.loads(file)
                 CARDS_DB = ScryfallDB(json_db=json_data)
                 console.log("Cards DB INIT Completed.")
             return CARDS_DB
