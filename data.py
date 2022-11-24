@@ -33,7 +33,7 @@ class CardImagery:
 
 class ScryfallEnum(Enum):
     def to_json(self):
-        return self.value
+        return self.name
 
 
 class Color(ScryfallEnum):
@@ -83,6 +83,7 @@ class Card:
     artist: str
     frame: str
     border_color: str
+    has_foil: bool = False
 
     def __post_init__(self):
         self.release_date = datetime.strptime(self.released_at, "%Y-%m-%d")
@@ -232,7 +233,8 @@ PREMODERN_EXTENDED_SETS = (
     "f04",  # Friday Night Magic 2004
 )
 
-SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_cards.json"  # "data/premodern_cards.json"
+SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_cards.json"
+# SCRYFALL_DEFAULT_CARDS_URL = "data/premodern_cards.json"
 BANNED_PREMODERN_CARDS = (
     "Amulet of Quoz",
     "Balance",
@@ -369,6 +371,11 @@ class ScryfallDB:
                 if "related_uris" in entry
                 else entry.get("gatherer_uri", None)
             )
+            if "has_foil" in entry:
+                has_foil = entry["has_foil"]
+            else:
+                has_foil = "finishes" in entry and "foil" in entry["finishes"]
+
             card = Card(
                 cid=cid,
                 scryfall_uri=entry["scryfall_uri"],
@@ -392,6 +399,7 @@ class ScryfallDB:
                 artist=entry["artist"],
                 frame=entry["frame"],
                 border_color=entry["border_color"],
+                has_foil=has_foil,
             )
             dbentry = self.make_dbentry(card.name)
             self._cards_map.setdefault(dbentry, list())
@@ -547,7 +555,7 @@ class ScryfallDB:
                 yield card
 
     def has_set(self, set_code: str) -> bool:
-        return set_code in self._mtg_sets_map
+        return set_code in self._mtg_sets_map or set_code in self._set_recode_map
 
     def in_banned_list(self, card_name: str) -> bool:
         card_name_entry = self.make_dbentry(card_name)

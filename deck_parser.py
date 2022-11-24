@@ -225,6 +225,8 @@ class Token:
                 if self.token_type == TokenType.BANNED_CARD
                 else "(RESTRICTED)"
                 if self.token_type == TokenType.RESTRICTED_CARD
+                else "(F)"
+                if self.is_foil and self.card.has_foil
                 else ""
             )
             return (
@@ -1405,9 +1407,9 @@ class DeckParser:
 if __name__ == "__main__":
     import json
 
-    db = json.load(open("./data/premodern_cards.json"))
+    db = json.load(open("data/premodern_cards.json"))
     from data import ScryfallDB
 
     cards = ScryfallDB(db)
     parser = DeckParser(cards)
-    parser.parse_card_list(["20 Island [USG] 2"])
+    parser.parse_card_list(["20 Island [MMQ] (F)"])
