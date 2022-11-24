@@ -9,83 +9,22 @@
 
     <!--  Card list style  -->
     <style>
-        body, h1, h2, h3, a {
-            font-weight: normal;
-            line-height: 1.5em;
-        }
-
-        tr, td {
-            padding: 0 1px;
-            margin: 0 !important;
-        }
-
-        h3 {
-            font-size: 13px;
-            margin: 2px 0;
-            padding: 0 5px;
-            font-weight: bold;
-        }
-
-        ul {
-            margin: 5px;
-            padding: 2px;
-            font-size: 8px;
-        }
-
-        ul li {
-            font-size: 10px;
-        }
-
-        code {
-            font-size: 9px;
-        }
-
-        div {
-            margin: 0;
-            text-align: justify;
-            padding: 1px 0 1px 8px;
-            line-height: 1.5em;
-        }
-
-        a:hover {
-            text-decoration: none !important;
-        }
-
-        a:link {
-            text-decoration: none !important;
-        }
-
-        a {
-            text-decoration: none !important;
-        }
-
-        a:active {
-            text-decoration: none !important;
-        }
-
-        table {
-            margin: 5px 0;
-        }
-
         .bullet {
             color: #FEC700;
         }
 
         .ok_import {
-            color: #89DC9F;
-        !important;
+            color: #89DC9F !important;
             font-weight: bold;
         }
 
         .warn_msg {
-            color: #FEC700;
-        !important;
+            color: #FEC700 !important;
             font-weight: bold;
         }
 
         .ko_noimport {
-            color: #FF977A;
-        !important;
+            color: #FF977A !important;
             font-weight: bold;
         }
 
@@ -124,8 +63,36 @@
 
         .table-list {
             column-count: 2;
-            height: 100%;
+            height: 90%;
         }
+
+        .form-control {
+            display: block;
+            width: 100%;
+            line-height: 26px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            box-shadow: none;
+            color: #333;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 12px 18px;
+            border-radius: 0;
+            font-weight: 400;
+            transition: all 500ms ease;
+            -webkit-transition: all 500ms ease;
+            -ms-transition: all 500ms ease;
+            -o-transition: all 500ms ease;
+        }
+
+        .form-control:focus {
+            border-color: #E91E63;
+            outline: 0;
+        }
+
+    .section-padding {
+        padding: 60px 0;
+    }
 
     </style>
     <link rel="stylesheet"
@@ -204,14 +171,33 @@
                 document.getElementById("instructions").style.display = "none"
 
                 if not deck.is_valid:
-                    errors = deck.validate()
+                    errors, warnings = deck.validate()
                     error_list = ""
                     for error in errors:
                         error_list += error.to_html()
+                    for warning in warnings:
+                        error_list += warning.to_html()
                     document.getElementById("messages").innerHTML = error_list
                     document.getElementById("col-messages").style.display = "inline"
-                else:
-                    document.getElementById("col-messages").style.display = "none"
+                    document.getElementById("form-submit").disabled = True
+                else:  # Deck IS VALID
+                    success_badge = '&lt;p&gt;&lt;span class="badge badge-success"&gt;Success: &lt;/span&gt; Deck is valid! &lt;/p&gt;'
+                    msg = ""
+                    _, warnings = deck.validate()
+                    if len(warnings):
+                        warning_list = ""
+                        for warning in warnings:
+                            warning_list += warning.to_html()
+                        msg += warning_list
+                    msg += success_badge
+                    document.getElementById("form-submit").disabled = False
+                    document.getElementById("messages").innerHTML = msg
+
+                    # Get list ready for posting
+                    document.getElementById("id_maindeck_cards").value = deck.mainboard_to_json()
+                    document.getElementById("id_sideboard_cards").value = deck.sideboard_to_json()
+                    document.getElementById("id_deck_list").value = deck.decklist_mtgo_export()
+
             else:
                 document.getElementById("card_list_parsed").innerHTML = ""
                 document.getElementById("col-messages").style.display = "none"
@@ -257,93 +243,134 @@
         document.getElementById("card_type").addEventListener("click",
                                                               parse_deck_group_type_extended)
 </py-script>
-
-<div class="container">
-    <div class="row">
-        <!--        <div class="col-md-12">-->
-        <div class="col-xl-4">
-            <h4><span class="badge badge-info">Card List</span></h4>
-            <textarea id="card_list_entry" rows="30" cols="35" style="width: 100%"></textarea>
-        </div>
-        <div class="col-xl-8">
-            <div class="btn-group btn-group-toggle" data-toggle="buttons">
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
-                   id="nogroup">No Group</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
-                   id="color">Colour</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
-                   id="rarity">Rarity</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
-                   id="cmc">CMC</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
-                   id="spell">Spell</a>
-                <a href="#" class="btn btn-secondary btn-lg" role="button" aria-pressed="true"
-                   id="card_type">Card Type</a>
+<section class="section-padding">
+    <div class="container">
+        <div class="row">
+            <div class="col">
+                <h3>M:TG Premodern Deck list Validator</h3>
             </div>
-            <div class="table-list" style="margin-top: 10px;">
-                <div id="instructions">
-                    <h4>Quick Instructions</h4>
-                    <div>To start loading your deck list in the Deck Importer just type or paste
-                        the names of the cards
-                        you want in the Card List (one per line).
-                        <br>
-                        The Card list supports the majority of M:TG deck formats:
-                        MTG Arena; MTGO; XMage; MTG Goldfish (all export); TappedOut
-                        (all export, but CSV); DeckStats.net; ".dec" files.
-                        <p>
-                        Each line in the Card list is processed immediately, and any recognized
-                        entry will appear in the Deck table.
-                        <br>Prepend to each card line the number of copies to import (default: 1).
-                        (e.g. <code>"4 Giant Growth"</code> or <code>"4x Giant Growth"</code>),
-                            and also include the code of an M:TG set before or after the card name
-                            to select a specific card art.
-                            <br>
-                            Lines starting with <code>#</code> or <code>//</code> will be
-                            interpreted as comments, and so skipped in the deck list parsing.
-                        </p>
+        </div>
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="row justify-content">
+                    <div class="col-xl-4">
+                        <h4><span class="badge badge-info">Card List</span></h4>
+                        <textarea id="card_list_entry" class="form-control"
+                                  rows="20" cols="35"
+                                  style="width: 100%"></textarea>
                     </div>
-                    <h5>Examples</h5>
-                    <div>
-                        <p>
-                        <code>10x Islands MMQ 2 (F)</code>: 10 FOIL "Island" from
-                        Set "Mercadian Masques", Art Index 2.
-                            The "(F)" at the end of the line denotes a foil card
-                        <br>
-                            <code>4 Forsaken City (PLS) 139</code>: 4 "Forsaken
-                            City" from Planeshift ("PLS"), Collector Nr. "139".<br>
-                            <br> This is an exemplar entry in MTGArena format as exported
-                            by TappedOut.
-                        <br>
-                            <code>18 Forest &lt;348&gt; [TE]</code>: 18 "Forest" from
-                            Tempest (<code>TE</code>), Collector Nr. "348".<br>
-                            <br> This is an exemplar entry in MTGArena deck format as exported
-                            by MTGGoldfish - also using the set code of MTGO for Tempest set.
-                            The Collector Number in angular brackets can be used to select
-                            a specific Card Art.
-                        </p>
+                    <div class="col-xl-8">
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <a href="#" class="btn btn-secondary btn-lg" role="button"
+                               aria-pressed="true"
+                               id="nogroup">No Group</a>
+                            <a href="#" class="btn btn-secondary btn-lg" role="button"
+                               aria-pressed="true"
+                               id="color">Colour</a>
+                            <a href="#" class="btn btn-secondary btn-lg" role="button"
+                               aria-pressed="true"
+                               id="rarity">Rarity</a>
+                            <a href="#" class="btn btn-secondary btn-lg" role="button"
+                               aria-pressed="true"
+                               id="cmc">CMC</a>
+                            <a href="#" class="btn btn-secondary btn-lg" role="button"
+                               aria-pressed="true"
+                               id="spell">Spell</a>
+                            <a href="#" class="btn btn-secondary btn-lg" role="button"
+                               aria-pressed="true"
+                               id="card_type">Card Type</a>
+                        </div>
+                        <div class="table-list" style="margin-top: 10px;">
+                            <div id="instructions">
+                                <h5>Quick Instructions</h5>
+                                <div>
+                                    <p>To start loading your deck list just type
+                                        the names of the cards you want in the Card List
+                                        (one per line).
+                                        Alternatively, (fastest way) we recommend
+                                        copying & pasting your decklist in one of the
+                                        most common <b>deck formats</b>,
+                                        and hit <b>Enter</b> to trigger the automatic
+                                        parsing.
+                                    </p>
+                                    <p>
+                                        MTG Arena; MTGO; XMage; MTG Goldfish (all export); TappedOut
+                                        (all export, but CSV); DeckStats.net; ".dec" files are
+                                        all <b>supported formats</b>.
+                                    </p>
+                                    <p>
+                                        All identified cards will automatically appear in a summary
+                                        deck
+                                        list table
+                                        (and these instructions will disappear!).
+                                        <br>
+                                        The table can be quickly re-organised using the
+                                        <b>buttons</b>
+                                        above
+                                        to quickly gather statistics and double-check your list.
+                                    </p>
+                                    <h5>Important and Quick tips</h5>
+                                    <p><b>(!!!)</b> Sometimes it may happen that not all scripts are
+                                        correctly loading (working on that!)
+                                        If you notice an error appearing right above this section,
+                                        and
+                                        nothing happens when
+                                        writing in the card list, please <b>refresh</b> this page
+                                        until
+                                        it works!!
+                                        (Apologies for any inconvenience))!</p>
+                                    <p><b>(1.)</b> Prepend to each card line the number of copies to
+                                        import
+                                        (default: 1). (e.g. <code>"4 Giant Growth"</code> or <code>"4x
+                                            Giant
+                                            Growth"</code>);
+                                    </p>
+                                    <p><b>(2.)</b> Include the code of an M:TG set before or after
+                                        the
+                                        card name to select a specific card art (using either
+                                        Scryfall
+                                        or MTGO set codes).
+                                        <b>NOTE: </b> Only Premodern legal cards are supported.
+                                        Therefore non-legal cards
+                                        will simply be NOT RECOGNISED.
+                                    </p>
+                                    <p><b>(3.)</b> Lines starting with <code>#</code> or
+                                        <code>//</code>
+                                        will
+                                        be
+                                        interpreted as comments, and so skipped in the deck list
+                                        parsing.</p>
+
+                                </div>
+                            </div>
+                            <table style="width: 100%" class="table table-sm table-responsive-sm"
+                                   style="display: none">
+                                <tbody id="card_list_parsed"></tbody>
+                            </table>
+                        </div>
+                        <div class="col" id="col-messages" style="display: inline">
+                            <div id="messages" style="width: 100%"></div>
+                        </div>
                     </div>
                 </div>
-                <table style="width: 100%" class="table table-sm table-responsive-sm"
-                       style="display: none">
-                    <tbody id="card_list_parsed"></tbody>
-                </table>
+                <div class="row">
+                    <div class="col-md-12">
+                        <input type="hidden" name="maindeck_cards" class="form-control"
+                               id="id_maindeck_cards">
+                    </div>
+                    <div class="col-md-12">
+                        <input type="hidden" name="sideboard_cards" class="form-control"
+                               id="id_sideboard_cards">
+                    </div>
+                    <div class="col-md-12">
+                        <input type="hidden" name="deck_list" class="form-control"
+                               id="id_deck_list">
+                    </div>
+                </div>
             </div>
+
         </div>
-        <!--        </div>-->
-    </div>
-    <div class="row">
-        <div class="col" id="col-messages" style="display: none">
-            <div id="messages" style="width: 100%">
-
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<div id="target">
-
-</div>
+    </div></section>
 
 
 </body>

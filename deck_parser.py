@@ -4,6 +4,7 @@ from enum import Enum
 from collections import defaultdict
 from typing import Optional, AnyStr, Union
 from data import Card, ScryfallDB
+import json
 
 
 class TokenType(Enum):
@@ -293,7 +294,16 @@ class Token:
 
 class DeckValidationError(Exception):
     def to_html(self):
-        return '<p class="text-warning">{msg}</p>'.format(msg=str(self))
+        return '<p><span class="badge badge-danger">Error: </span> {msg}</p>'.format(
+            msg=str(self)
+        )
+
+
+class DeckValidationWarning(Exception):
+    def to_html(self):
+        return '<p><span class="badge badge-warning">Warning: </span> {msg}</p>'.format(
+            msg=str(self)
+        )
 
 
 class MinDeckSizeConstraintError(DeckValidationError):
@@ -320,6 +330,18 @@ class TooManyCardCopies(DeckValidationError):
             f"The deck contains too many copies ({current_number}) "
             f"of the card {card_name}."
         )
+        super().__init__(msg)
+
+
+class DeckSectionEmpty(DeckValidationWarning):
+    def __init__(self, deck_section: DeckSection):
+        msg = f"The {deck_section.name} does not contain any card! "
+        super().__init__(msg)
+
+
+class TooManyCardsWarning(DeckValidationWarning):
+    def __init__(self, deck_section: DeckSection, current_size: int):
+        msg = f"The {deck_section.name} contains more than {deck_section.min_size}. Current number: {current_size}"
         super().__init__(msg)
 
 
@@ -631,8 +653,9 @@ class Deck:
                 card_name = token.card.name
                 self._cards_map[card_name].append(token)
 
-    def validate(self) -> Optional[list[Exception]]:
+    def validate(self):
         errors = list()
+        warnings = list()
 
         # deck section size validation
         no_cards_in_md = sum(
@@ -650,6 +673,16 @@ class Deck:
 
         if not sb_constraint_ok:
             errors.append(MaxDeckSizeConstraintError(self._sideboard, no_cards_in_sb))
+
+        if no_cards_in_sb == 0:
+            warnings.append(DeckSectionEmpty(deck_section=self._sideboard))
+
+        if no_cards_in_md > 60:
+            warnings.append(
+                TooManyCardsWarning(
+                    deck_section=self._mainboard, current_size=no_cards_in_md
+                )
+            )
 
         # check card copies
         for card_name in self._cards_map:
@@ -669,7 +702,7 @@ class Deck:
                     TooManyCardCopies(card_name=card_name, current_number=no_copies)
                 )
 
-        return errors
+        return tuple(errors), tuple(warnings)
 
     def total_cards_in(self, section: str) -> int:
         if section not in self._deck_cards:
@@ -701,9 +734,48 @@ class Deck:
             return self._g_by_type_extended()
         return self._g_by_no_group()
 
+    def mainboard_to_json(self) -> str:
+        return self._section_to_json(self._mainboard)
+
+    def sideboard_to_json(self) -> str:
+        return self._section_to_json(self._sideboard)
+
+    def _section_to_json(self, section: DeckSection) -> str:
+        cards_to_json = list()
+        for token in self._deck_cards[section.name]:
+            if not token.card:
+                continue
+            cards_to_json.append(
+                {"amount": token.quantity, "card": token.card.to_json()}
+            )
+        return json.dumps(cards_to_json)
+
+    def decklist_mtgo_export(self) -> str:
+        """Export list in MTGO format for easy quick upload on MTGGoldfish in case"""
+        decklist_txt = ""
+        from data import SET_RECODE_MAP
+
+        reverse_recode = {v: k for k, v in SET_RECODE_MAP.items()}
+        for section in (self._mainboard, self._sideboard):
+            key = section.name
+            for card_token in self._deck_cards[key]:
+                if not card_token.card:
+                    continue
+                if card_token.card.set_code in reverse_recode:
+                    set_code = reverse_recode[card_token.card.set_code]
+                else:
+                    set_code = card_token.card.set_code
+                line = (
+                    f"{card_token.quantity} {card_token.card.name} " f"[{set_code}]\n"
+                )
+                decklist_txt += line
+            decklist_txt += "\n"  # empty line as separator for the next section
+        return decklist_txt
+
     @property
     def is_valid(self) -> bool:
-        return len(self.validate()) == 0
+        errors, _ = self.validate()
+        return len(errors) == 0
 
     @property
     def name(self):
@@ -1412,4 +1484,4 @@ if __name__ == "__main__":
 
     cards = ScryfallDB(db)
     parser = DeckParser(cards)
-    parser.parse_card_list(["17 Island (mir) 336"])
+    parser.parse_card_list(["20 Island [MMQ] (F)"])
