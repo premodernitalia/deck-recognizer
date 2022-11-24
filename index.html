@@ -151,7 +151,8 @@
 
     <py-config>
         autoclose_loader = true
-        packages = ["https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/PyTrie-0.4.0-py3-none-any.whl"]
+        packages =
+        ["https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/PyTrie-0.4.0-py3-none-any.whl"]
         paths = ["./data.py", "./deck_parser.py"]
 
         [[runtimes]]
@@ -279,38 +280,44 @@
             </div>
             <div class="table-list" style="margin-top: 10px;">
                 <div id="instructions">
-                    <h3>Quick Instructions</h3>
-                    <div>To start using the Deck Importer just type or paste the names of the cards
-                        you want in the Card List (one per line). The Card list also supports
-                        a full deck in one of the most popular M:TG formats.
-                        Several M:TG deck formats are supported: MTG Arena; MTGO, XMage,
-                        MTG Goldfish (all export); TappedOut (all export, but CSV);
-                        DeckStats.net; ".dec" files.
+                    <h4>Quick Instructions</h4>
+                    <div>To start loading your deck list in the Deck Importer just type or paste
+                        the names of the cards
+                        you want in the Card List (one per line).
                         <br>
+                        The Card list supports the majority of M:TG deck formats:
+                        MTG Arena; MTGO; XMage; MTG Goldfish (all export); TappedOut
+                        (all export, but CSV); DeckStats.net; ".dec" files.
+                        <p>
                         Each line in the Card list is processed immediately, and any recognized
                         entry will appear in the Deck table.
+                        <br>Prepend to each card line the number of copies to import (default: 1).
+                        (e.g. <code>"4 Giant Growth"</code> or <code>"4x Giant Growth"</code>),
+                            and also include the code of an M:TG set before or after the card name
+                            to select a specific card art.
+                            <br>
+                            Lines starting with <code>#</code> or <code>//</code> will be
+                            interpreted as comments, and so skipped in the deck list parsing.
+                        </p>
                     </div>
-                    <h4>Examples</h4>
-                    <div><p><code class="bullet">10x Islands+ MIR 2</code>: 10 FOIL "Island" from
-                        Set "Mirage", Art Index 2.</p>
-                        <p><code class="bullet">4 Darksteel Citadel (M15) 242</code>: 4 "Darksteel
-                            Citadel" from "M15", Collector Nr. "242".<br><br> This is an exemplar
-                            entry in MTGArena format as exported by TappedOut.</p>
-                        <p><code class="bullet">18 Forest &lt;348&gt; [TE] (F)</code>: 18 FOIL
-                            "Forest" from Tempest (<code>TE</code>), Collector Nr. "348".<br>
+                    <h5>Examples</h5>
+                    <div>
+                        <p>
+                        <code>10x Islands MMQ 2 (F)</code>: 10 FOIL "Island" from
+                        Set "Mercadian Masques", Art Index 2.
+                            The "(F)" at the end of the line denotes a foil card
+                        <br>
+                            <code>4 Forsaken City (PLS) 139</code>: 4 "Forsaken
+                            City" from Planeshift ("PLS"), Collector Nr. "139".<br>
+                            <br> This is an exemplar entry in MTGArena format as exported
+                            by TappedOut.
+                        <br>
+                            <code>18 Forest &lt;348&gt; [TE]</code>: 18 "Forest" from
+                            Tempest (<code>TE</code>), Collector Nr. "348".<br>
                             <br> This is an exemplar entry in MTGArena deck format as exported
                             by MTGGoldfish - also using the set code of MTGO for Tempest set.
-                            The "(F)" at the end of the line denotes a foil card,
-                            and the Collector Number in angular
-                            brackets is is used to select a specific Card Art.
-                        </p>
-                        <p><code class="bullet">4x TMP|Counterspell</code>: 4 copies of
-                            "Counterspell" from "Tempest".<br><br> In this entry, the Set code is
-                            specified before the card name using the (optional) pipe
-                            separator.Alternative valid separators for set codes are braces,
-                            brackets, and parenthesis.</p>
-                        <p><code class="bullet">SB: 2 [M19:28] Mighty Leap</code>: 2 copies of
-                            "Mighty Leap" from "M19", Collector Nr. "28" to be added in "Sideboard".
+                            The Collector Number in angular brackets can be used to select
+                            a specific Card Art.
                         </p>
                     </div>
                 </div>
