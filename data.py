@@ -7,7 +7,7 @@ from datetime import date, datetime
 # ScryfallDB
 from typing import Iterable, Generator, Sequence, Optional
 
-# from pytrie import StringTrie as Trie
+from pytrie import StringTrie as Trie
 
 # -----
 # Cards
@@ -234,9 +234,9 @@ PREMODERN_EXTENDED_SETS = (
     "f04",  # Friday Night Magic 2004
 )
 
-# SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_cards.json"
 SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_db_compressed.bz"
 # SCRYFALL_DEFAULT_CARDS_URL = "data/premodern_db_compressed.bz"
+
 BANNED_PREMODERN_CARDS = (
     "Amulet of Quoz",
     "Balance",
@@ -271,32 +271,6 @@ BANNED_PREMODERN_CARDS = (
     "Yawgmoth's Will",
 )
 
-# Map of different set code between Scryfall and MTGO
-SET_RECODE_MAP = {
-    "te": "tmp",
-    "evg": "dd1",
-    "ne": "nem",
-    "pr": "pcy",
-    "ms3": "mp2",
-    "wl": "wth",
-    "ul": "ulg",
-    "mm": "mmq",
-    "pc1": "hop",
-    "ud": "uds",
-    "mi": "mir",
-    "ex": "exo",
-    "ms2": "mps",
-    "ps": "pls",
-    "dar": "dom",
-    "ap": "apc",
-    "vi": "vis",
-    "od": "ody",
-    "in": "inv",
-    "7e": "7ed",
-    "st": "sth",
-    "uz": "usg",
-}
-
 
 class ScryfallDB:
     """
@@ -310,22 +284,62 @@ class ScryfallDB:
     (See PREMODERN_SETS and PREMODERN_EXTENDED_SETS as examples)
     """
 
+    # Map of different set code between Scryfall and MTGO
+    SET_RECODE_MAP = {
+        "te": "tmp",
+        "evg": "dd1",
+        "ne": "nem",
+        "pr": "pcy",
+        "ms3": "mp2",
+        "wl": "wth",
+        "ul": "ulg",
+        "mm": "mmq",
+        "pc1": "hop",
+        "ud": "uds",
+        "mi": "mir",
+        "ex": "exo",
+        "ms2": "mps",
+        "ps": "pls",
+        "dar": "dom",
+        "ap": "apc",
+        "vi": "vis",
+        "od": "ody",
+        "in": "inv",
+        "7e": "7ed",
+        "st": "sth",
+        "uz": "usg",
+    }
+
+    NON_PRINTABLE_CARD_NAMES_MAP = {
+        "bosium strip": "bösium strip",
+        "lim-dul's vault": "lim-dûl's vault",
+        "lim-dul's high guard": "lim-dûl's high guard",
+        "marton stronmgald": "márton stromgald",
+        "lim-dul's cohort": "lim-dûl's cohort",
+        "junun efreet": "junún efreet",
+        "oath of lim-dul": "oath of lim-dûl",
+        "ghazban ogre": "ghazbán ogre",
+        "lim-dul's hex": "lim-dûl's hex",
+        "dandan": "dandân",
+        "legions of lim-dul": "legions of lim-dûl",
+        "lim-dul's paladin": "lim-dûl's paladin",
+        "el-hajjaj": "el-hajjâj",
+    }
+
     def __init__(
         self,
         json_db: dict,
         preferred_sets: tuple[str] = PREMODERN_EXTENDED_SETS,
         banned_list: tuple[str] = BANNED_PREMODERN_CARDS,
-        set_recode_map: dict[str, str] = SET_RECODE_MAP,
     ):
         self._db = json_db
-        self._cards_map = dict()  # Trie()
+        self._cards_map = Trie()
         self._load_cards_from_db()
         self._mtg_sets_map = self._init_mtg_sets_map()
         self._preferred_sets = preferred_sets
         self._banned_list = tuple(
             [self.make_dbentry(card_name) for card_name in banned_list]
         )
-        self._set_recode_map = set_recode_map
 
     def _load_cards_from_db(self):
         for entry in self._db:
@@ -448,7 +462,8 @@ class ScryfallDB:
             If True, only one single entry per retrieved Card (if any) will be returned.
         Return
         ------
-            (Lazy) Iterable sequence of retrieved Card instances matching the search criteria.
+            (Lazy) Iterable sequence of retrieved Card instances matching the search criteria,
+            sorted in ascending order by release date (old first) and collector number.
             Empty result set will be returned if no match is found in the DB.
         """
 
@@ -462,18 +477,21 @@ class ScryfallDB:
         entries = self.all_cards
 
         if is_card:
+            # Allow entries with printable entries for non-printable cards' names
+            if card_name.lower() in self.NON_PRINTABLE_CARD_NAMES_MAP:
+                card_name = self.NON_PRINTABLE_CARD_NAMES_MAP[card_name.lower()]
+
             if card_name.endswith("*"):  # prefix search
                 db_key = self.make_dbentry(card_name.replace("*", "").strip())
-                # entries = chain.from_iterable(self._cards_map.itervalues(prefix=db_key))
-                entries = chain.from_iterable(self._cards_map.values())
+                entries = chain.from_iterable(self._cards_map.itervalues(prefix=db_key))
             else:
                 db_key = self.make_dbentry(card_name)
                 entries = self._cards_map.get(db_key, tuple())
 
         if is_set:  # Lookup by set_code
             set_code = set_code.lower()
-            if set_code in self._set_recode_map:
-                set_code = self._set_recode_map[set_code]
+            if set_code in self.SET_RECODE_MAP:
+                set_code = self.SET_RECODE_MAP[set_code]
             elif set_code not in self._mtg_sets_map:
                 return self._result_set(())  # Empty result
 
@@ -558,7 +576,7 @@ class ScryfallDB:
                 yield card
 
     def has_set(self, set_code: str) -> bool:
-        return set_code in self._mtg_sets_map or set_code in self._set_recode_map
+        return set_code in self._mtg_sets_map or set_code in self.SET_RECODE_MAP
 
     def in_banned_list(self, card_name: str) -> bool:
         card_name_entry = self.make_dbentry(card_name)
