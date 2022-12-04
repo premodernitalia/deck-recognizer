@@ -240,12 +240,20 @@ class Token:
                 else ""
             )
             return (
-                '<a href="{image_link}" title="{card_name}" target="_blank">{card_name} [{card_set}]'
-                "{extra}</a>".format(
-                    image_link=self.card.art.normal,
+                '<div><a href="{scryfall_url}" title="{card_name}" '
+                'class="card_entry" data-image="{img_url}" '
+                'target="_blank">{card_name} [{card_set}] {collector_number} '
+                "{extra}</a></div>".format(
+                    scryfall_url=self.card.scryfall_uri,
                     card_name=self.card.name,
                     card_set=self.card.set_code.upper(),
+                    collector_number=f"(#{self.card.collector_number})"
+                    if self.card.collector_number
+                    else "",
                     extra=extra,
+                    img_url=self.card.art.border_crop
+                    if self.card.art.border_crop
+                    else self.card.art.normal,
                 )
             )
         else:
