@@ -331,8 +331,8 @@
         init_cards_db = create_proxy(init_db)
 
         document.getElementById("card_list_entry").addEventListener("focus", init_cards_db)
-        document.getElementById("card_list_entry").addEventListener("keypress", parse_deck_no_group)
-        document.getElementById("card_list_entry").addEventListener("change", parse_deck_no_group)
+        document.getElementById("card_list_entry").addEventListener("keypress", parse_deck_select_group)
+        document.getElementById("card_list_entry").addEventListener("change", parse_deck_select_group)
         document.getElementById("optimise_cardlist").addEventListener("change", parse_deck_select_group)
 
         # Deck Organiser Buttons
@@ -343,6 +343,7 @@
         document.getElementById("spell").addEventListener("click", parse_deck_group_type)
         document.getElementById("card_type").addEventListener("click",
                                                               parse_deck_group_type_extended)
+        init_cards_db()
     </py-script>
     <section class="section-padding">
         <div class="container">
@@ -366,7 +367,7 @@
                             <div class="col-xl-7">
                                 <div class="btn-group btn-group-toggle"
                                      data-toggle="buttons" role="group" aria-label="Basic example">
-                                    <button type="button" class="btn btn-secondary" id="nogroup">
+                                    <button type="button" class="btn btn-secondary active" id="nogroup">
                                         No Group
                                     </button>
                                     <button type="button" class="btn btn-secondary" id="color">
