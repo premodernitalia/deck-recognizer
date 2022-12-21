@@ -234,8 +234,9 @@ PREMODERN_EXTENDED_SETS = (
     "f04",  # Friday Night Magic 2004
 )
 
-SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_db_compressed.bz"
-# SCRYFALL_DEFAULT_CARDS_URL = "data/premodern_db_compressed.bz"
+# SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_db_compressed.bz"
+SCRYFALL_DEFAULT_CARDS_URL = "data/premodern_db_compressed.bz"
+SCRYFALL_EXTENDED_CARDS_URL = "data/premodern_db_compressed_extended.bz"
 
 BANNED_PREMODERN_CARDS = (
     "Amulet of Quoz",
@@ -343,7 +344,7 @@ class ScryfallDB:
 
     def _load_cards_from_db(self):
         for entry in self._db:
-            if entry.get("lang", "en") != "en":
+            if entry.get("lang", "en") not in ("en", "it"):
                 continue
             if (
                 "games" in entry
