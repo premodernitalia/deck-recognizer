@@ -164,10 +164,13 @@ class Token:
     def is_message_token(self):
         return self.token_type in (
             TokenType.COMMENT,
-            TokenType.UNKNOWN_CARD,
             TokenType.UNKNOWN_TEXT,
             TokenType.WARNING_MESSAGE,
         )
+
+    @property
+    def is_unknown_card(self):
+        return self.token_type == TokenType.UNKNOWN_CARD
 
     @property
     def card_key(self) -> str:
@@ -259,10 +262,7 @@ class Token:
         else:
             css_class = self._token_css_class(self.token_type)
             template_tag = '<span class="{css_class}">{text}</span>'
-            if (self.token_type == TokenType.MANA_COLOUR) or (
-                self.token_type == TokenType.CARD_TYPE
-                and self.text not in ("Spells", "Lands")
-            ):
+            if self.token_type == TokenType.MANA_COLOUR:
                 if "{" in self.text:
                     colours = self.text.replace("{", "").replace("}", "-").split("-")
                     colours = [c.strip().lower() for c in colours]
@@ -275,6 +275,13 @@ class Token:
                 ttext = ""
                 for symbol in colours:
                     ttext += mana_tag.format(symbol=symbol)
+                if self.quantity > 0:
+                    ttext += f" ({self.quantity})"
+            elif self.token_type == TokenType.CARD_TYPE and self.text not in ("Spells", "Lands"):
+                print(self.text)
+                card_type = self.text.replace(" ", "").strip().lower()
+                mana_tag = '<i class="ms ms-{symbol} ms-cost"></i>'
+                ttext = f'<a title="{card_type.title()}"> {mana_tag.format(symbol=card_type)} </a>'
                 if self.quantity > 0:
                     ttext += f" ({self.quantity})"
             elif self.token_type == TokenType.CARD_CMC:
@@ -311,14 +318,21 @@ class Token:
 
 class DeckValidationError(Exception):
     def to_html(self):
-        return '<p><span class="badge badge-danger">Error: </span> {msg}</p>'.format(
+        return '<p><span class="badge badge-pill badge-danger">Error: </span> {msg}</p>'.format(
             msg=str(self)
         )
 
 
 class DeckValidationWarning(Exception):
     def to_html(self):
-        return '<p><span class="badge badge-warning">Warning: </span> {msg}</p>'.format(
+        return '<p><span class="badge badge-pill badge-warning">Warning: </span> {msg}</p>'.format(
+            msg=str(self)
+        )
+
+
+class DeckValidationInfo(Exception):
+    def to_html(self):
+        return '<p><span class="badge badge_pill badge-dark">Check: </span> {msg}</p>'.format(
             msg=str(self)
         )
 
@@ -362,6 +376,11 @@ class TooManyCardsWarning(DeckValidationWarning):
         super().__init__(msg)
 
 
+class UnknownCard(DeckValidationInfo):
+    def __init__(self, card_name: str):
+        msg = f"\"{card_name}\" is unrecognised!"
+        super().__init__(msg)
+
 class Deck:
 
     # GROUPING CONSTANTS
@@ -384,6 +403,7 @@ class Deck:
         self._name = name
         self._mainboard = main_section
         self._sideboard = side_section
+        self._unknown_cards = list()
 
         deck_name_token = list(
             filter(lambda t: t.token_type == TokenType.DECK_NAME, tokens)
@@ -411,7 +431,11 @@ class Deck:
                 self._deck_cards[key].append(token)
                 self._cards_map[token.card.name].append(token)
 
-    def _g_by_colour(self) -> list[Token]:
+        unknown_cards = filter(lambda t: t.is_unknown_card, tokens)
+        for token in unknown_cards:
+            self._unknown_cards.append(token)
+
+    def f_group_by_colour(self) -> list[Token]:
         tokens = list()
         for section in (self._mainboard, self._sideboard):
             key = section.name
@@ -492,7 +516,7 @@ class Deck:
 
         return tokens
 
-    def _g_by_rarity(self) -> list[Token]:
+    def f_group_by_rarity(self) -> list[Token]:
         tokens = list()
         for section in (self._mainboard, self._sideboard):
             key = section.name
@@ -523,7 +547,7 @@ class Deck:
                     tokens.append(card_token)
         return tokens
 
-    def _g_by_type(self) -> list[Token]:
+    def f_group_by_type(self) -> list[Token]:
         tokens = list()
         for section in (self._mainboard, self._sideboard):
             key = section.name
@@ -568,7 +592,7 @@ class Deck:
                 tokens.append(card_token)
         return tokens
 
-    def _g_by_cmc(self) -> list[Token]:
+    def f_group_by_cmc(self) -> list[Token]:
         tokens = list()
         for section in (self._mainboard, self._sideboard):
             key = section.name
@@ -600,7 +624,7 @@ class Deck:
                     tokens.append(card_token)
         return tokens
 
-    def _g_by_type_extended(self) -> list[Token]:
+    def f_group_by_type_extended(self) -> list[Token]:
         tokens = list()
         for section in (self._mainboard, self._sideboard):
             key = section.name
@@ -645,7 +669,7 @@ class Deck:
                     tokens.append(card_token)
         return tokens
 
-    def _g_by_no_group(self) -> list[Token]:
+    def f_no_group(self) -> list[Token]:
         tokens = list()
         for section in (self._mainboard, self._sideboard):
             key = section.name
@@ -663,6 +687,7 @@ class Deck:
     def validate(self):
         errors = list()
         warnings = list()
+        unknown_cards = list()
 
         # deck section size validation
         no_cards_in_md = sum([t.quantity for t in self.cards[self._mainboard.name]])
@@ -705,7 +730,11 @@ class Deck:
                     TooManyCardCopies(card_name=card_name, current_number=no_copies)
                 )
 
-        return tuple(errors), tuple(warnings)
+        if self._unknown_cards:
+            for token in self._unknown_cards:
+                unknown_cards.append(UnknownCard(card_name=token.text))
+
+        return tuple(errors), tuple(warnings), tuple(unknown_cards)
 
     def total_cards_in(self, section: str) -> int:
         if section not in self.cards:
@@ -725,18 +754,18 @@ class Deck:
             grouping = self.NOGROUP
 
         if grouping == self.NOGROUP:
-            return self._g_by_no_group()
+            return self.f_no_group()
         if grouping == self.COLOUR:
-            return self._g_by_colour()
+            return self.f_group_by_colour()
         if grouping == self.RARITY:
-            return self._g_by_rarity()
+            return self.f_group_by_rarity()
         if grouping == self.CMC:
-            return self._g_by_cmc()
+            return self.f_group_by_cmc()
         if grouping == self.SPELL:
-            return self._g_by_type()
+            return self.f_group_by_type()
         if grouping == self.TYPE:
-            return self._g_by_type_extended()
-        return self._g_by_no_group()
+            return self.f_group_by_type_extended()
+        return self.f_no_group()
 
     def mainboard_to_json(self) -> str:
         return self._section_to_json(self._mainboard)
@@ -754,31 +783,9 @@ class Deck:
             )
         return json.dumps(cards_to_json)
 
-    def decklist_mtgo_export(self) -> str:
-        """Export list in MTGO format for easy quick upload on MTGGoldfish in case"""
-        decklist_txt = ""
-        from data import ScryfallDB
-
-        reverse_recode = {v: k for k, v in ScryfallDB.SET_RECODE_MAP.items()}
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            for card_token in self.cards[key]:
-                if not card_token.card:
-                    continue
-                if card_token.card.set_code in reverse_recode:
-                    set_code = reverse_recode[card_token.card.set_code]
-                else:
-                    set_code = card_token.card.set_code
-                line = (
-                    f"{card_token.quantity} {card_token.card.name} " f"[{set_code}]\n"
-                )
-                decklist_txt += line
-            decklist_txt += "\n"  # empty line as separator for the next section
-        return decklist_txt
-
     @property
     def is_valid(self) -> bool:
-        errors, _ = self.validate()
+        errors, *rest = self.validate()
         return len(errors) == 0
 
     @property
@@ -1125,6 +1132,8 @@ class DeckParser:
 
         # set code sorted (desc) by card quantity
         sorted_frequencies = sorted(card_edition_by_count, reverse=True)
+        if not sorted_frequencies:
+            return None
         ratio = (top_frequency := sorted_frequencies[0]) / sum(
             card_stats_per_edition.values()
         )
@@ -1356,7 +1365,7 @@ class DeckParser:
 
             if card_name not in self._db:
                 if amount:
-                    # it seems the text could be a potential card as there is an amount specied.
+                    # it seems the text could be a potential card as there is an amount specified.
                     # Therefore, we will keep this as a potential hint for an unknown card.
                     # whilst we do keep looking for another matcher to parse the request.
                     unknown_card_token = Token(
