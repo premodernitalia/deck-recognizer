@@ -314,17 +314,25 @@ class ScryfallDB:
     NON_PRINTABLE_CARD_NAMES_MAP = {
         "bosium strip": "bösium strip",
         "lim-dul's vault": "lim-dûl's vault",
+        "lim dul's vault": "lim-dûl's vault",
         "lim-dul's high guard": "lim-dûl's high guard",
-        "marton stronmgald": "márton stromgald",
+        "lim dul's high guard": "lim-dûl's high guard",
+        "marton stromgald": "márton stromgald",
         "lim-dul's cohort": "lim-dûl's cohort",
+        "lim dul's cohort": "lim-dûl's cohort",
         "junun efreet": "junún efreet",
         "oath of lim-dul": "oath of lim-dûl",
+        "oath of lim dul": "oath of lim-dûl",
         "ghazban ogre": "ghazbán ogre",
         "lim-dul's hex": "lim-dûl's hex",
+        "lim dul's hex": "lim-dûl's hex",
         "dandan": "dandân",
         "legions of lim-dul": "legions of lim-dûl",
+        "legions of lim dul": "legions of lim-dûl",
         "lim-dul's paladin": "lim-dûl's paladin",
+        "lim dul's paladin": "lim-dûl's paladin",
         "el-hajjaj": "el-hajjâj",
+        "el hajjaj": "el-hajjâj",
     }
 
     def __init__(
