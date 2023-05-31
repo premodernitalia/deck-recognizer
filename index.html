@@ -62,8 +62,11 @@
         }
 
         .table-list {
-            column-count: 2;
-            height: 90%;
+            min-height: 550px;
+        }
+
+        #table-wrapper {
+            column-count: 1;
         }
 
         .form-control {
@@ -111,7 +114,7 @@
         }
 
         #card_list_entry, #card_list_parsed, #instructions{
-            font-size: 14px;
+            font-size: 12px;
         }
 
     </style>
@@ -133,25 +136,14 @@
             crossorigin="anonymous"></script>
 
     <!-- PyScript -->
-    <link rel="stylesheet" href="https://pyscript.net/releases/2022.09.1/pyscript.css"/>
-    <script defer src="https://pyscript.net/releases/2022.09.1/pyscript.js"></script>
-
-    <py-config>
-        autoclose_loader = true
-        packages = ["PyTrie-0.4.0-py3-none-any.whl"]
-        paths = ["./data.py", "./deck_parser.py"]
-
-        [[runtimes]]
-        src = "https://cdn.jsdelivr.net/pyodide/v0.21.3/full/pyodide.js"
-        name = "pyodide-0.21.3"
-        lang = "python"
-    </py-config>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2023.03.1/pyscript.css"/>
+    <script defer src="https://pyscript.net/releases/2023.03.1/pyscript.js"></script>
 
     <script type="text/javascript">
         function initialise_previews(){
-            let yOff = 60; // Horizontal position of image relative to mousepointer.
-            let xOff = 135; // Vertical position of image relative to mousepointer
-            $(".card_entry").mouseenter(function (e) {
+            let yOff = 60; // Horizontal position of image relative to mouse pointer.
+            let xOff = 135; // Vertical position of image relative to mouse pointer
+            $('.card_entry').mouseenter(function (e) {
                 if ($(this).parent('div').children('div.hover_img').length === 0) {
                     let image_name = $(this).data('image');
                     let imageTag = '<div class="hover_img">' + '<img src="' + image_name +
@@ -162,7 +154,7 @@
                 $(this).parent('div').children('div.hover_img').show();
             });
 
-            $(".card_entry").mouseleave(function () {
+            $('.card_entry').mouseleave(function () {
                 $(this).parent('div').children('div.hover_img').hide();
             });
         }
@@ -172,179 +164,8 @@
 </head>
 
 <body>
-    <py-script>
-        from deck_parser import DeckParser, Deck
-        from js import document, console, initialise_previews
-        from pyodide.ffi import create_proxy
-        from pyodide.http import pyfetch
-        from data import ScryfallDB, SCRYFALL_DEFAULT_CARDS_URL
-        import bz2
-        import json
-
-
-        NO_GROUP_ID = "nogroup"
-        COLOUR_ID = "color"
-        RARITY_ID = "rarity"
-        CMC_ID = "cmc"
-        SPELL_ID = "spell"
-        TYPE_ID = "card_type"
-
-        FILTER_BUTTONS = {
-            NO_GROUP_ID: document.getElementById(NO_GROUP_ID),
-            COLOUR_ID: document.getElementById(COLOUR_ID),
-            RARITY_ID: document.getElementById(RARITY_ID),
-            CMC_ID: document.getElementById(CMC_ID),
-            SPELL_ID: document.getElementById(SPELL_ID),
-            TYPE_ID: document.getElementById(TYPE_ID),
-        }
-
-        GROUPING = {
-            NO_GROUP_ID: Deck.NOGROUP,
-            COLOUR_ID: Deck.COLOUR,
-            RARITY_ID: Deck.RARITY,
-            CMC_ID: Deck.CMC,
-            SPELL_ID: Deck.SPELL,
-            TYPE_ID: Deck.TYPE,
-        }
-
-        CARDS_DB = None
-        async def init_db(*args):
-            global CARDS_DB
-            if CARDS_DB is None:
-                console.log("Cards DB INIT.")
-                response = await pyfetch(SCRYFALL_DEFAULT_CARDS_URL, method="GET")
-                bz_data = await response.memoryview()
-                file = bz2.decompress(bz_data)
-                json_data = json.loads(file)
-                CARDS_DB = ScryfallDB(json_db=json_data)
-                console.log("Cards DB INIT Completed.")
-            return CARDS_DB
-
-        async def parse_deck_list(grouping: str):
-            cards_db = await init_db()
-
-            optimise_card_art = document.getElementById("optimise_cardlist").checked
-            deck_parser = DeckParser(cards_db=cards_db, optimise_card_art=optimise_card_art)
-            card_list = document.getElementById("card_list_entry").value
-            card_list = [l.strip() for l in card_list.split("\n")]
-            tokens = deck_parser.parse_card_list(card_list)
-            deck = Deck(tokens=tokens)
-            display_tokens = deck.deck_list(grouping=grouping)
-            if display_tokens:
-                rows = ""
-                for token in display_tokens:
-                    rows += token.to_html
-
-                document.getElementById("card_list_parsed").innerHTML = rows
-                document.getElementById("card_list_parsed").style.display = "table"
-                document.getElementById("instructions").style.display = "none"
-
-                # call JS function to initialise previews
-                initialise_previews()
-
-                deck_name_badge = "" if not deck.name else f'&lt;p&gt;&lt;span class="badge badge-info"&gt;Deck Name: &lt;/span&gt; {deck.name} &lt;/p&gt;'
-                msg = ""
-                error_list = ""
-                warning_list = ""
-                success_badge = ""
-                if not deck.is_valid:
-                    errors, warnings = deck.validate()
-                    for error in errors:
-                        error_list += error.to_html()
-                    for warning in warnings:
-                        warning_list += warning.to_html()
-                else:  # Deck IS VALID
-                    success_badge = '&lt;p&gt;&lt;span class="badge badge-success"&gt;Success: &lt;/span&gt; Deck is valid! &lt;/p&gt;'
-                    _, warnings = deck.validate()
-                    if len(warnings):
-                        for warning in warnings:
-                            warning_list += warning.to_html()
-
-                    document.getElementById("messages").innerHTML = msg
-
-                    # Get list ready for posting
-                    document.getElementById("id_maindeck_cards").value = deck.mainboard_to_json()
-                    document.getElementById("id_sideboard_cards").value = deck.sideboard_to_json()
-                    document.getElementById("id_deck_list").value = deck.decklist_mtgo_export()
-                    if deck.name:
-                        document.getElementById("id_deck_name").value = deck.name
-
-                if deck_name_badge:
-                    msg += deck_name_badge
-                if error_list:
-                    msg += error_list
-                if warning_list:
-                    msg += warning_list
-                if success_badge:
-                    msg += success_badge
-                document.getElementById("messages").innerHTML = msg
-                document.getElementById("col-messages").style.display = "inline"
-
-            else:
-                document.getElementById("card_list_parsed").innerHTML = ""
-                document.getElementById("col-messages").style.display = "none"
-                document.getElementById("card_list_parsed").style.display = "none"
-                document.getElementById("instructions").style.display = "block"
-
-        async def parse_deck_grouping_key(key: str):
-            if key not in FILTER_BUTTONS.keys():
-                key = NO_GROUP_ID
-
-            for bid, button in FILTER_BUTTONS.items():
-                if bid == key:
-                    continue
-                button.classList.remove("active")
-
-            await parse_deck_list(grouping=GROUPING[key])
-
-        @create_proxy
-        async def parse_deck_no_group(*args, **kwargs):
-            await parse_deck_grouping_key(key=NO_GROUP_ID)
-
-        @create_proxy
-        async def parse_deck_group_colour(*args, **kwargs):
-            await parse_deck_grouping_key(key=COLOUR_ID)
-
-        @create_proxy
-        async def parse_deck_group_rarity(*args, **kwargs):
-            await parse_deck_grouping_key(key=RARITY_ID)
-
-        @create_proxy
-        async def parse_deck_group_cmc(*args, **kwargs):
-            await parse_deck_grouping_key(key=CMC_ID)
-
-        @create_proxy
-        async def parse_deck_group_type(*args, **kwargs):
-            await parse_deck_grouping_key(key=SPELL_ID)
-
-        @create_proxy
-        async def parse_deck_group_type_extended(*args, **kwargs):
-            await parse_deck_grouping_key(key=TYPE_ID)
-
-        @create_proxy
-        async def parse_deck_select_group(*args, **kwargs):
-            for key, button in FILTER_BUTTONS.items():
-                if button.classList.contains("active"):
-                    await parse_deck_grouping_key(key=key)
-                    break
-
-        init_cards_db = create_proxy(init_db)
-
-        document.getElementById("card_list_entry").addEventListener("focus", init_cards_db)
-        document.getElementById("card_list_entry").addEventListener("keypress", parse_deck_select_group)
-        document.getElementById("card_list_entry").addEventListener("change", parse_deck_select_group)
-        document.getElementById("optimise_cardlist").addEventListener("change", parse_deck_select_group)
-
-        # Deck Organiser Buttons
-        document.getElementById("nogroup").addEventListener("click", parse_deck_no_group)
-        document.getElementById("color").addEventListener("click", parse_deck_group_colour)
-        document.getElementById("rarity").addEventListener("click", parse_deck_group_rarity)
-        document.getElementById("cmc").addEventListener("click", parse_deck_group_cmc)
-        document.getElementById("spell").addEventListener("click", parse_deck_group_type)
-        document.getElementById("card_type").addEventListener("click",
-                                                              parse_deck_group_type_extended)
-        init_cards_db()
-    </py-script>
+    <py-config src="deck_parser.toml" type="toml"></py-config>
+    <py-script src="main.py"></py-script>
     <section class="section-padding">
         <div class="container">
             <div class="row">
@@ -352,133 +173,151 @@
                     <h3>M:TG Premodern Deck list Validator</h3>
                 </div>
             </div>
+            <div class="row" style="display: none;" id="download">
+                <div class="col-md-12">
+                    <div class="btn-group" role="group">
+                        <button id="download_button_group" type="button"
+                                class="btn btn-secondary dropdown-toggle"
+                                data-toggle="dropdown"
+                                aria-haspopup="true" aria-expanded="false">
+                            Download
+                        </button>
+                        <div class="dropdown-menu" aria-labelledby="download_button_group">
+                            <a class="dropdown-item" id="export_arena">MTGArena Format (No Card Version)</a>
+                            <a class="dropdown-item" id="export_arena_version">MTGArena Format (Exact Card Version)</a>
+                            <a class="dropdown-item" id="export_mtggoldfish">MTGO/MTGGoldfish Format (Exact Card Version)</a>
+                            <a class="dropdown-item" id="export_dec">Apprentice & MWS.dec Format</a>
+                            <a class="dropdown-item" id="export_forge">Forge.dck Format</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xl-12">
+                    <div class="row justify-content">
+                        <div class="col-xl-5">
+                            <h4><span class="badge badge-info">Card List</span></h4>
+                            <textarea id="card_list_entry" class="form-control"
+                                      rows="20" cols="35"
+                                      style="width: 100%; min-height: 555px;"></textarea>
+                            <input type="checkbox" id="optimise_cardlist" />
+                            <label for="optimise_cardlist">Auto select card art</label>
+                        </div>
+                        <div class="col-xl-7">
+                            <div class="btn-group btn-group-toggle"
+                                 data-toggle="buttons" role="group" aria-label="Filters">
+                                <button type="button" class="btn btn-secondary active" id="nogroup">
+                                    No Group
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="color">
+                                    Colour
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="rarity">
+                                    Rarity
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="cmc">
+                                    CMC
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="spell">
+                                    Spell
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="card_type">
+                                    Card Type
+                                </button>
+                            </div>
+                            <div id="table-wrapper" class="table-list" style="margin-top: 10px;">
+                                <div id="instructions">
+                                    <h5>Quick Instructions</h5>
+                                    <p>To start loading your deck list just type
+                                        the names of the cards you want in the Card
+                                        List
+                                        (one per line).
+                                        Alternatively, (fastest way) we recommend
+                                        copying & pasting your decklist in one of
+                                        the
+                                        most common <b>deck formats</b>,
+                                        and hit <b>Enter</b> to trigger the
+                                        automatic
+                                        parsing.
+                                    </p>
+                                    <p>
+                                        MTG Arena; MTGO; XMage; MTG Goldfish (all
+                                        export); TappedOut
+                                        (all export, but CSV); DeckStats.net; ".dec"
+                                        files are
+                                        all <b>supported formats</b>.
+                                    </p>
+                                    <p>
+                                        All identified cards will automatically
+                                        appear in a summary deck list table
+                                        (and these instructions will disappear!).
+                                        <br>
+                                        The table can be re-organised using the <b>buttons</b>
+                                        above
+                                        to quickly gather statistics and
+                                        double-check your list.
+                                    </p>
+                                    <br>
+                                    <h5>Important and Quick tips</h5>
+                                    <p><b>(1.) Set Code:</b> Prepend to each card
+                                        line the number of copies to import
+                                        (default: 1). (e.g. <code>"4 Giant
+                                            Growth"</code> or <code>"4x Giant
+                                            Growth"</code>);
+                                    </p>
+                                    <p><b>(2.) Card Art:</b> Include the code of an
+                                        M:TG set before or after the
+                                        card name to select a specific card art
+                                        (using either Scryfall or MTGO set codes).
+                                        <b>NOTE: </b> Only Premodern legal cards are
+                                        supported. Therefore, non-legal cards
+                                        will simply be NOT RECOGNISED.
+                                    </p>
+                                    <p><b>(3.) Deck name:</b> Assign a name to your
+                                        deck by including <code>// deck: YOUR
+                                            NAME</code>
+                                        or <code>// name: YOUR NAME</code> anywhere
+                                        in your list.
+                                    </p>
+                                    <p><b>(4.) Comments</b> Lines starting with
+                                        <code>#</code> or <code>//</code> will
+                                        be interpreted as comments or placeholder,
+                                        and simply ignored in the parsing.</p>
+                                    <p><b>(!!!)</b> If you notice an error appearing
+                                        right above this section, and nothing
+                                        happens when
+                                        writing in the card list, just
+                                        <b>refresh</b> this page until it works!!
+                                        (Thanks!)</p>
+
+
+                                </div>
+                                <table style="width: 100%"
+                                       class="table table-sm table-responsive-sm"
+                                       style="display: none">
+                                    <tbody id="card_list_parsed"></tbody>
+                                </table>
+                            </div>
+                            <div class="col" id="col-messages" style="display: inline">
+                                <div id="messages" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <form method="post">
                 <div class="row">
-                    <div class="col-xl-12">
-                        <div class="row justify-content">
-                            <div class="col-xl-5">
-                                <h4><span class="badge badge-info">Card List</span></h4>
-                                <textarea id="card_list_entry" class="form-control"
-                                          rows="20" cols="35"
-                                          style="width: 100%"></textarea>
-                                <input type="checkbox" id="optimise_cardlist" />
-                                <label for="optimise_cardlist">Auto select card art</label>
-                            </div>
-                            <div class="col-xl-7">
-                                <div class="btn-group btn-group-toggle"
-                                     data-toggle="buttons" role="group" aria-label="Basic example">
-                                    <button type="button" class="btn btn-secondary active" id="nogroup">
-                                        No Group
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" id="color">
-                                        Colour
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" id="rarity">
-                                        Rarity
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" id="cmc">
-                                        CMC
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" id="spell">
-                                        Spell
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" id="card_type">
-                                        Card Type
-                                    </button>
-                                </div>
-                                <div class="table-list" style="margin-top: 10px;">
-                                    <div id="instructions">
-                                        <h5>Quick Instructions</h5>
-                                        <div>
-                                            <p>To start loading your deck list just type
-                                                the names of the cards you want in the Card
-                                                List
-                                                (one per line).
-                                                Alternatively, (fastest way) we recommend
-                                                copying & pasting your decklist in one of
-                                                the
-                                                most common <b>deck formats</b>,
-                                                and hit <b>Enter</b> to trigger the
-                                                automatic
-                                                parsing.
-                                            </p>
-                                            <p>
-                                                MTG Arena; MTGO; XMage; MTG Goldfish (all
-                                                export); TappedOut
-                                                (all export, but CSV); DeckStats.net; ".dec"
-                                                files are
-                                                all <b>supported formats</b>.
-                                            </p>
-                                            <p>
-                                                All identified cards will automatically
-                                                appear in a summary deck list table
-                                                (and these instructions will disappear!).
-                                                <br>
-                                                The table can be re-organised using the <b>buttons</b>
-                                                above
-                                                to quickly gather statistics and
-                                                double-check your list.
-                                            </p>
-                                            <br>
-                                            <h5>Important and Quick tips</h5>
-                                            <p><b>(1.) Set Code:</b> Prepend to each card
-                                                line the number of copies to import
-                                                (default: 1). (e.g. <code>"4 Giant
-                                                    Growth"</code> or <code>"4x Giant
-                                                    Growth"</code>);
-                                            </p>
-                                            <p><b>(2.) Card Art:</b> Include the code of an
-                                                M:TG set before or after the
-                                                card name to select a specific card art
-                                                (using either Scryfall or MTGO set codes).
-                                                <b>NOTE: </b> Only Premodern legal cards are
-                                                supported. Therefore, non-legal cards
-                                                will simply be NOT RECOGNISED.
-                                            </p>
-                                            <p><b>(3.) Deck name:</b> Assign a name to your
-                                                deck by including <code>// deck: YOUR
-                                                    NAME</code>
-                                                or <code>// name: YOUR NAME</code> anywhere
-                                                in your list.
-                                            </p>
-                                            <p><b>(4.) Comments</b> Lines starting with
-                                                <code>#</code> or <code>//</code> will
-                                                be interpreted as comments or placeholder,
-                                                and simply ignored in the parsing.</p>
-                                            <p><b>(!!!)</b> If you notice an error appearing
-                                                right above this section, and nothing
-                                                happens when
-                                                writing in the card list, just
-                                                <b>refresh</b> this page until it works!!
-                                                (Thanks!)</p>
-
-                                        </div>
-                                    </div>
-                                    <table style="width: 100%"
-                                           class="table table-sm table-responsive-sm"
-                                           style="display: none">
-                                        <tbody id="card_list_parsed"></tbody>
-                                    </table>
-                                </div>
-                                <div class="col" id="col-messages" style="display: inline">
-                                    <div id="messages" style="width: 100%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-12">
-                                <input type="hidden" id="id_maindeck_cards"/>
-                            </div>
-                            <div class="col-md-12">
-                                <input type="hidden" id="id_sideboard_cards"/>
-                            </div>
-                            <div class="col-md-12">
-                                <input type="hidden" id="id_deck_list"/>
-                            </div>
-                            <div class="col-md-12">
-                                <input type="hidden" id="id_deck_name"/>
-                            </div>
-                        </div>
+                    <div class="col-md-12">
+                        <input type="text" contenteditable="false" id="id_maindeck_cards"/>
+                    </div>
+                    <div class="col-md-12">
+                        <input type="text" contenteditable="false" id="id_sideboard_cards"/>
+                    </div>
+                    <div class="col-md-12">
+                        <input type="text" contenteditable="false" id="id_deck_list"/>
+                    </div>
+                    <div class="col-md-12">
+                        <input type="text" contenteditable="false" id="id_deck_name"/>
                     </div>
                 </div>
             </form>
