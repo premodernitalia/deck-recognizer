@@ -1,12 +1,7 @@
-packages = ["PyTrie-0.4.0-py3-none-any.whl"]
+packages = ["https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/PyTrie-0.4.0-py3-none-any.whl"]
 
 [[fetch]]
-files = ["./data.py", "./deck_parser.py", "./deck_export.py"]
+files = ["./data.py", "./deck.py", "./deck_parser.py", "./deck_export.py"]
 
 [splashscreen]
 enabled = false
-
-[[interpreters]]
-src = "https://cdn.jsdelivr.net/pyodide/v0.23.0/full/pyodide.js"
-name = "pyodide-0.23.0"
-lang = "python"
