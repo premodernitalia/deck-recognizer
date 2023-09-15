@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title></title>
+    <title>MTG Deck List Validator</title>
     <meta name="description" content="">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -136,30 +136,10 @@
             crossorigin="anonymous"></script>
 
     <!-- PyScript -->
-    <link rel="stylesheet" href="https://pyscript.net/releases/2023.03.1/pyscript.css"/>
-    <script defer src="https://pyscript.net/releases/2023.03.1/pyscript.js"></script>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2023.05.1/pyscript.css"/>
+    <script defer src="https://pyscript.net/releases/2023.05.1/pyscript.js"></script>
 
-    <script type="text/javascript">
-        function initialise_previews(){
-            let yOff = 60; // Horizontal position of image relative to mouse pointer.
-            let xOff = 135; // Vertical position of image relative to mouse pointer
-            $('.card_entry').mouseenter(function (e) {
-                if ($(this).parent('div').children('div.hover_img').length === 0) {
-                    let image_name = $(this).data('image');
-                    let imageTag = '<div class="hover_img">' + '<img src="' + image_name +
-                        '"style="top: '+ (e.pageY - yOff) +'px; left: '+ (e.pageX + xOff) +'px;" ' +
-                        'alt="image" />' + '</div>';
-                    $(this).parent('div').append(imageTag);
-                }
-                $(this).parent('div').children('div.hover_img').show();
-            });
-
-            $('.card_entry').mouseleave(function () {
-                $(this).parent('div').children('div.hover_img').hide();
-            });
-        }
-
-    </script>
+    <script type="text/javascript" src="./cardart_preview.js"></script>
 
 </head>
 
@@ -170,7 +150,11 @@
         <div class="container">
             <div class="row">
                 <div class="col">
-                    <h3>M:TG Premodern Deck list Validator</h3>
+                    <h3>M:TG Premodern Deck App</h3>
+                    <p>
+                        A simple app to validate and export your M:TG
+                        (<code>Premodern</code>) Deck list.
+                    </p>
                 </div>
             </div>
             <div class="row" style="display: none;" id="download">
@@ -182,12 +166,17 @@
                                 aria-haspopup="true" aria-expanded="false">
                             Download
                         </button>
+
                         <div class="dropdown-menu" aria-labelledby="download_button_group">
-                            <a class="dropdown-item" id="export_arena">MTGArena Format (No Card Version)</a>
-                            <a class="dropdown-item" id="export_arena_version">MTGArena Format (Exact Card Version)</a>
-                            <a class="dropdown-item" id="export_mtggoldfish">MTGO/MTGGoldfish Format (Exact Card Version)</a>
-                            <a class="dropdown-item" id="export_dec">Apprentice & MWS.dec Format</a>
-                            <a class="dropdown-item" id="export_forge">Forge.dck Format</a>
+                            <a class="dropdown-item" id="arena" download>MTGArena Format</a>
+                            <a class="dropdown-item" id="online" download>MTG Online Format</a>
+                            <a class="dropdown-item" id="dek" download>MTGO <code>(.dek)</code> Format</a>
+                            <a class="dropdown-item" id="mtggoldfish" download>MTGGoldfish Format</a>
+                            <a class="dropdown-item" id="dec" download>Apprentice & <code>MWS.dec</code> Format</a>
+                            <a class="dropdown-item" id="salvation" download>MTG Salvation Format</a>
+                            <a class="dropdown-item" id="deckstats" download>Deckstats.net Format</a>
+                            <a class="dropdown-item" id="forge" download>Forge.dck Format</a>
+                            <a class="dropdown-item" id="txt" download>Textual Format</a>
                         </div>
                     </div>
                 </div>
@@ -269,9 +258,9 @@
                                         M:TG set before or after the
                                         card name to select a specific card art
                                         (using either Scryfall or MTGO set codes).
-                                        <b>NOTE: </b> Only Premodern legal cards are
+                                        <b>NOTE: </b> <u>Only Premodern legal cards are
                                         supported. Therefore, non-legal cards
-                                        will simply be NOT RECOGNISED.
+                                        will simply be NOT RECOGNISED.</u>
                                     </p>
                                     <p><b>(3.) Deck name:</b> Assign a name to your
                                         deck by including <code>// deck: YOUR
@@ -283,13 +272,21 @@
                                         <code>#</code> or <code>//</code> will
                                         be interpreted as comments or placeholder,
                                         and simply ignored in the parsing.</p>
-                                    <p><b>(!!!)</b> If you notice an error appearing
-                                        right above this section, and nothing
-                                        happens when
-                                        writing in the card list, just
-                                        <b>refresh</b> this page until it works!!
-                                        (Thanks!)</p>
-
+                                    <p><b>(!!!)</b> The first time you run the app, it needs a
+                                    couple of seconds to bootstrap, due to Scryfall cards
+                                    DB download in the background.
+                                        For this reason, the <b>card pool</b> supported by the app
+                                        is currently limited to Premodern one!
+                                    </p>
+                                    <p>
+                                        If you notice any error, mistake, or for further
+                                        Import/Export Deck formats, please feel free to
+                                        <b>reach out directly</b>
+                                        either via
+                                        <a href="mailto:mtglotusvale@gmail.com?subject=Premodern Deck App Request">
+                                            email
+                                        </a> or Discord <code>@lotus_vale</code> 🤘.
+                                    </p>
 
                                 </div>
                                 <table style="width: 100%"
@@ -305,23 +302,10 @@
                     </div>
                 </div>
             </div>
-            <form method="post">
-                <div class="row">
-                    <div class="col-md-12">
-                        <input type="text" contenteditable="false" id="id_maindeck_cards"/>
-                    </div>
-                    <div class="col-md-12">
-                        <input type="text" contenteditable="false" id="id_sideboard_cards"/>
-                    </div>
-                    <div class="col-md-12">
-                        <input type="text" contenteditable="false" id="id_deck_list"/>
-                    </div>
-                    <div class="col-md-12">
-                        <input type="text" contenteditable="false" id="id_deck_name"/>
-                    </div>
-                </div>
-            </form>
         </div>
+    </section>
+    <section style="display: inline-block">
+        <py-repl auto-generate="true"> </py-repl>
     </section>
 
 

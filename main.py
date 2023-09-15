@@ -4,20 +4,44 @@ from functools import partial
 
 import pyodide.ffi
 
-from deck_parser import DeckParser, Deck
+from deck_parser import DeckParser
+from deck import Deck
 from data import ScryfallDB, SCRYFALL_DEFAULT_CARDS_URL
-from deck_export import DECK_EXPORTERS
-from deck_export import (MTG_GOLDFISH, MTG_ARENA_WITH_VERSION,
-                         MTG_ARENA_NO_VERSION, DEC_FORMAT, DCK_FORMAT)
+from deck_export import DECK_EXPORTERS, export_deck
+from deck_export import (
+    MTG_GOLDFISH,
+    MTG_ONLINE,
+    MTG_ARENA,
+    DCK_FORMAT,
+    DEC_FORMAT,
+    DEK_FORMAT,
+    TXT_FORMAT,
+    MTG_SALVATION,
+    DECKSTATS,
+)
+
+# Formats / ID Mapping
+FORMATS_TO_ID = {
+    MTG_GOLDFISH: "mtggoldfish",
+    MTG_ARENA: "arena",
+    MTG_ONLINE: "online",
+    MTG_SALVATION: "salvation",
+    TXT_FORMAT: "txt",
+    DEC_FORMAT: "dec",
+    DEK_FORMAT: "dek",
+    DCK_FORMAT: "forge",
+    DECKSTATS: "deckstats",
+}
 
 from js import document, console, initialise_previews
-from js import showDirectoryPicker, Object
+from js import Object
 
 import pyodide_js
 from pyodide.ffi import to_js
 
 from pyodide.ffi import create_proxy
 from pyodide.http import pyfetch
+
 
 NO_GROUP_ID = "nogroup"
 COLOUR_ID = "color"
@@ -57,6 +81,7 @@ async def init_db(*args):
         json_data = json.loads(file)
         CARDS_DB = ScryfallDB(json_db=json_data)
         console.log("Cards DB INIT Completed.")
+        console.log("Cards DB loaded: ", SCRYFALL_DEFAULT_CARDS_URL.split("/")[-1])
     else:
         console.log("Cards DB already initialised!")
     return CARDS_DB
@@ -67,8 +92,10 @@ async def parse_deck_list(grouping: str):
 
     optimise_card_art = document.getElementById("optimise_cardlist").checked
     deck_parser = DeckParser(cards_db=cards_db, optimise_card_art=optimise_card_art)
+
     card_list = document.getElementById("card_list_entry").value
     card_list = [l.strip() for l in card_list.split("\n")]
+
     tokens = deck_parser.parse_card_list(card_list)
     deck = Deck(tokens=tokens)
     display_tokens = deck.deck_list(grouping=grouping)
@@ -81,12 +108,16 @@ async def parse_deck_list(grouping: str):
         document.getElementById("card_list_parsed").innerHTML = rows
         document.getElementById("card_list_parsed").style.display = "table"
         document.getElementById("instructions").style.display = "none"
-        document.getElementById("table-wrapper").style.columnCount = 2;
+        document.getElementById("table-wrapper").style.columnCount = 2
 
         # call JS function to initialise previews
         initialise_previews()
 
-        deck_name_badge = "" if not deck.name else f'<p><span class="badge badge-pill badge-info">Deck Name: </span>{deck.name}</p>'
+        deck_name_badge = (
+            ""
+            if not deck.name
+            else f'<p><span class="badge badge-pill badge-info">Deck Name: </span>{deck.name}</p>'
+        )
         msg = ""
         error_list = ""
         warning_list = ""
@@ -105,20 +136,12 @@ async def parse_deck_list(grouping: str):
             success_badge = '<p><span class="badge badge-pill badge-success">Success:</span> Deck is valid!</p>'
 
             # Get list ready for posting
-            mtg_goldfish_func = partial(export_mtg_goldfish, deck=deck, cards_db=CARDS_DB)
-            document.getElementById("id_maindeck_cards").value = deck.mainboard_to_json()
-            document.getElementById("id_sideboard_cards").value = deck.sideboard_to_json()
-
-            # FIXME
-            # document.getElementById("id_deck_list").value = mtgo_decklist_export
-            if deck.name:
-                document.getElementById("id_deck_name").value = deck.name
+            mtg_export_func = partial(export_deck_format, deck=deck, cards_db=CARDS_DB)
 
             # Configure Download buttons
-            document.getElementById("export_mtggoldfish").addEventListener("click",
-                                                                           create_proxy(
-                                                                               mtg_goldfish_func))
-
+            document.getElementById("download_button_group").addEventListener(
+                "click", create_proxy(mtg_export_func)
+            )
             document.getElementById("download").style.display = "inline"
 
         if deck_name_badge:
@@ -140,40 +163,14 @@ async def parse_deck_list(grouping: str):
         document.getElementById("col-messages").style.display = "none"
         document.getElementById("card_list_parsed").style.display = "none"
         document.getElementById("instructions").style.display = "block"
-        document.getElementById("table-wrapper").style.columnCount = 1;
+        document.getElementById("table-wrapper").style.columnCount = 1
         document.getElementById("download").style.display = "none"
 
 
-NATIVE_FS = None
-
-
-async def save_list_to_file(decklist: str, deck_name: str, format_name: str) -> None:
-    global NATIVE_FS
-    if NATIVE_FS is None:
-        modeObject = to_js({"mode": "readwrite"}, dict_converter=Object.fromEntries)
-        dir_handler = await showDirectoryPicker()
-        if await dir_handler.queryPermission(modeObject) != "granted":
-            if await dir_handler.requestPermission(modeObject) != "granted":
-                raise Exception("Unable to read and write directory")
-        try:
-            NATIVE_FS = await pyodide_js.mountNativeFS("/deck_export", dir_handler)
-        except pyodide.ffi.JsException:
-            NATIVE_FS = None
-            console.log("Exception in setting up folder")
-
-    if NATIVE_FS is not None:
-        deck_name = deck_name.lower().replace(" ", "_")
-        fname = f"{format_name}_{deck_name}.txt"
-        console.log("Saving File: ", fname)
-        with open("/deck_export/" + fname, "w") as mtg_export_file:
-            mtg_export_file.write(decklist)
-        await NATIVE_FS.syncfs()
-
-
-async def export_mtg_goldfish(event, deck: Deck, cards_db: ScryfallDB):
-    deck_exporter = DECK_EXPORTERS[MTG_GOLDFISH](db=cards_db)
-    decklist = deck_exporter.export(deck)
-    await save_list_to_file(decklist, deck_name=deck.name, format_name="mtgo_goldfish")
+async def export_deck_format(event, deck: Deck, cards_db: ScryfallDB = None):
+    for format, exporter_cls in DECK_EXPORTERS.items():
+        deck_exporter = exporter_cls(db=cards_db)
+        export_deck(deck_exporter, deck, id_target=FORMATS_TO_ID[format])
 
 
 async def parse_deck_grouping_key(key: str):
@@ -229,9 +226,15 @@ async def parse_deck_select_group(*args, **kwargs):
 init_cards_db = create_proxy(init_db)
 
 document.getElementById("card_list_entry").addEventListener("focus", init_cards_db)
-document.getElementById("card_list_entry").addEventListener("keypress", parse_deck_select_group)
-document.getElementById("card_list_entry").addEventListener("change", parse_deck_select_group)
-document.getElementById("optimise_cardlist").addEventListener("change", parse_deck_select_group)
+document.getElementById("card_list_entry").addEventListener(
+    "keypress", parse_deck_select_group
+)
+document.getElementById("card_list_entry").addEventListener(
+    "change", parse_deck_select_group
+)
+document.getElementById("optimise_cardlist").addEventListener(
+    "change", parse_deck_select_group
+)
 
 # Deck Organiser Buttons
 document.getElementById("nogroup").addEventListener("click", parse_deck_no_group)
@@ -239,6 +242,7 @@ document.getElementById("color").addEventListener("click", parse_deck_group_colo
 document.getElementById("rarity").addEventListener("click", parse_deck_group_rarity)
 document.getElementById("cmc").addEventListener("click", parse_deck_group_cmc)
 document.getElementById("spell").addEventListener("click", parse_deck_group_type)
-document.getElementById("card_type").addEventListener("click",
-                                                      parse_deck_group_type_extended)
+document.getElementById("card_type").addEventListener(
+    "click", parse_deck_group_type_extended
+)
 init_cards_db()
