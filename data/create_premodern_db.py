@@ -178,6 +178,13 @@ def load_json_data(scryfall_db_path):
 
 
 def in_premodern_pool(card_entry) -> bool:
+    if (
+        "games" in card_entry
+        and len(card_entry["games"]) == 1
+        and card_entry["games"][0] == "mtgo"
+    ):
+        return False
+
     if card_entry["digital"] or "paper" not in card_entry["games"]:
         return False
 

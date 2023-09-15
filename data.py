@@ -71,6 +71,7 @@ class Card:
     type_line: Optional[str]
     oracle_text: Optional[str]
     legalities: dict[str, str]
+    lang: str
 
     # set info
     set_code: str
@@ -420,6 +421,7 @@ class ScryfallDB:
                 gatherer_uri=gatherer_uri,
                 name=entry["name"],
                 released_at=entry["released_at"],
+                lang=entry["lang"],
                 colors=colors,
                 color_identity=color_identity,
                 mana_cost=entry.get("mana_cost", None),
