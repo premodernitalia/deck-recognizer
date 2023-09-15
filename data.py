@@ -9,6 +9,7 @@ from typing import Iterable, Generator, Sequence, Optional
 
 from pytrie import StringTrie as Trie
 
+
 # -----
 # Cards
 # -----
@@ -235,8 +236,9 @@ PREMODERN_EXTENDED_SETS = (
 )
 
 # SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_db_compressed.bz"
-SCRYFALL_DEFAULT_CARDS_URL = "data/premodern_db_compressed.bz"
-SCRYFALL_EXTENDED_CARDS_URL = "data/premodern_db_compressed_extended.bz"
+SCRYFALL_DEFAULT_CARDS_URL = "https://raw.githubusercontent.com/premodernitalia/deck-recognizer/main/data/premodern_db_compressed_extended.bz"
+# SCRYFALL_DEFAULT_CARDS_URL = "data/premodern_db_compressed.bz"
+# SCRYFALL_EXTENDED_CARDS_URL = "data/premodern_db_compressed_extended.bz"
 
 BANNED_PREMODERN_CARDS = (
     "Amulet of Quoz",
@@ -252,6 +254,7 @@ BANNED_PREMODERN_CARDS = (
     "Goblin Recruiter",
     "Grim Monolith",
     "Jeweled Bird",
+    "Land Tax",
     "Mana Vault",
     "Memory Jar",
     "Mind Twist",
@@ -335,11 +338,17 @@ class ScryfallDB:
         "el hajjaj": "el-hajjâj",
     }
 
+    REVERSE_CARD_NAMES_MAP = {
+        non_printable: printable
+        for printable, non_printable in NON_PRINTABLE_CARD_NAMES_MAP.items()
+    }
+
     def __init__(
         self,
         json_db: dict,
         preferred_sets: tuple[str] = PREMODERN_EXTENDED_SETS,
         banned_list: tuple[str] = BANNED_PREMODERN_CARDS,
+        restricted_list: tuple[str] = [],
     ):
         self._db = json_db
         self._cards_map = Trie()
@@ -348,6 +357,10 @@ class ScryfallDB:
         self._preferred_sets = preferred_sets
         self._banned_list = tuple(
             [self.make_dbentry(card_name) for card_name in banned_list]
+        )
+
+        self._restricted_list = tuple(
+            [self.make_dbentry(card_name) for card_name in restricted_list]
         )
 
     def _load_cards_from_db(self):
@@ -590,6 +603,10 @@ class ScryfallDB:
     def in_banned_list(self, card_name: str) -> bool:
         card_name_entry = self.make_dbentry(card_name)
         return card_name_entry in self._banned_list
+
+    def in_restricted_list(self, card_name: str) -> bool:
+        card_name_entry = self.make_dbentry(card_name)
+        return card_name_entry in self._restricted_list
 
     def add_set_code(self, codename: tuple[str, str]) -> None:
         """Method to add any Code-Name expansion set found in the MTG-Manager data
