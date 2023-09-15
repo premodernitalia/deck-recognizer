@@ -7,7 +7,6 @@ from itertools import filterfalse
 from typing import Iterable
 from typing import Optional, AnyStr, Union
 from data import Card, ScryfallDB
-import json
 
 
 class TokenType(Enum):
@@ -59,8 +58,9 @@ class Token:
     # Factory Methods
     # ===============
     @classmethod
-    def LegalCardToken(  # noqa
+    def CardToken(  # noqa
         cls,
+        token_type: TokenType,
         card: Card,
         count: int,
         deck_section: DeckSection,
@@ -68,17 +68,13 @@ class Token:
         is_foil: bool = False,
     ):
         return cls(
-            token_type=TokenType.LEGAL_CARD,
+            token_type=token_type,
             quantity=count,
             card=card,
             is_foil=is_foil,
             deck_section=deck_section,
             card_request_has_setcode=card_has_setcode,
         )
-
-    @classmethod
-    def BannedCardToken(cls, card_name: str, count: int):  # noqa
-        return cls(token_type=TokenType.BANNED_CARD, quantity=count, text=card_name)
 
     # WARNING MESSAGES
     # ================
@@ -132,7 +128,11 @@ class Token:
 
     @property
     def is_card_token_for_deck(self):
-        return self.token_type in (TokenType.LEGAL_CARD, TokenType.RESTRICTED_CARD)
+        return self.token_type in (
+            TokenType.LEGAL_CARD,
+            TokenType.RESTRICTED_CARD,
+            TokenType.BANNED_CARD,
+        )
 
     @property
     def is_token_for_deck(self):
@@ -277,11 +277,21 @@ class Token:
                     ttext += mana_tag.format(symbol=symbol)
                 if self.quantity > 0:
                     ttext += f" ({self.quantity})"
-            elif self.token_type == TokenType.CARD_TYPE and self.text not in ("Spells", "Lands"):
-                print(self.text)
-                card_type = self.text.replace(" ", "").strip().lower()
-                mana_tag = '<i class="ms ms-{symbol} ms-cost"></i>'
-                ttext = f'<a title="{card_type.title()}"> {mana_tag.format(symbol=card_type)} </a>'
+            elif self.token_type == TokenType.CARD_TYPE and self.text not in (
+                "Spells",
+                "Lands",
+            ):
+                card_type = (
+                    self.text.split("—")[0].lower().replace("legendary", "").strip()
+                )
+                symbols = [
+                    f"ms-{symbol.lower().strip()}" for symbol in card_type.split()
+                ]
+                mana_tag_template = '<i class="ms {symbol} ms-cost"></i>'
+                mana_tag = ""
+                for symbol in symbols:
+                    mana_tag += mana_tag_template.format(symbol=symbol)
+                ttext = f'<a title="{self.text.title()}"> {mana_tag} </a>'
                 if self.quantity > 0:
                     ttext += f" ({self.quantity})"
             elif self.token_type == TokenType.CARD_CMC:
@@ -314,490 +324,6 @@ class Token:
         else:
             td_tag = td_template_nocard.format(text=self.repr_tag)
         return table_row_tag.format(cells=td_tag)
-
-
-class DeckValidationError(Exception):
-    def to_html(self):
-        return '<p><span class="badge badge-pill badge-danger">Error: </span> {msg}</p>'.format(
-            msg=str(self)
-        )
-
-
-class DeckValidationWarning(Exception):
-    def to_html(self):
-        return '<p><span class="badge badge-pill badge-warning">Warning: </span> {msg}</p>'.format(
-            msg=str(self)
-        )
-
-
-class DeckValidationInfo(Exception):
-    def to_html(self):
-        return '<p><span class="badge badge_pill badge-dark">Check: </span> {msg}</p>'.format(
-            msg=str(self)
-        )
-
-
-class MinDeckSizeConstraintError(DeckValidationError):
-    def __init__(self, deck_section: DeckSection, current_size: int):
-        msg = (
-            f"The {deck_section.name} does not contain at "
-            f"least {deck_section.min_size} cards. Current size: {current_size}"
-        )
-        super().__init__(msg)
-
-
-class MaxDeckSizeConstraintError(DeckValidationError):
-    def __init__(self, deck_section: DeckSection, current_size: int):
-        msg = (
-            f"The {deck_section.name} can contain up to "
-            f"{deck_section.max_size} cards. Current size: {current_size}"
-        )
-        super().__init__(msg)
-
-
-class TooManyCardCopies(DeckValidationError):
-    def __init__(self, card_name: str, current_number: int):
-        msg = (
-            f"The deck contains too many copies ({current_number}) "
-            f"of the card {card_name}."
-        )
-        super().__init__(msg)
-
-
-class DeckSectionEmpty(DeckValidationWarning):
-    def __init__(self, deck_section: DeckSection):
-        msg = f"The {deck_section.name} does not contain any card! "
-        super().__init__(msg)
-
-
-class TooManyCardsWarning(DeckValidationWarning):
-    def __init__(self, deck_section: DeckSection, current_size: int):
-        msg = f"The {deck_section.name} contains more than {deck_section.min_size}. Current number: {current_size}"
-        super().__init__(msg)
-
-
-class UnknownCard(DeckValidationInfo):
-    def __init__(self, card_name: str):
-        msg = f"\"{card_name}\" is unrecognised!"
-        super().__init__(msg)
-
-class Deck:
-
-    # GROUPING CONSTANTS
-    NOGROUP = "NOGROUP"
-    TYPE = "TYPE"
-    SPELL = "SPELL"
-    RARITY = "RARITY"
-    CMC = "CMC"
-    COLOUR = "COLOR"
-
-    SUPPORTED_GROUPS = (COLOUR, TYPE, SPELL, RARITY, CMC)
-
-    def __init__(
-        self,
-        tokens: list[Token],
-        name: str = "",
-        main_section: DeckSection = MAIN_DECK,
-        side_section: DeckSection = SIDEBOARD,
-    ):
-        self._name = name
-        self._mainboard = main_section
-        self._sideboard = side_section
-        self._unknown_cards = list()
-
-        deck_name_token = list(
-            filter(lambda t: t.token_type == TokenType.DECK_NAME, tokens)
-        )
-        if len(deck_name_token):
-            self._name = deck_name_token[0].text
-
-        self._deck_cards: dict[str, list[Token]] = {
-            self._mainboard.name: [],
-            self._sideboard.name: [],
-        }
-        # a dictionary mapping each token associated to the same card
-        # (used solely in deck validation)
-        self._cards_map: dict[str, list[Token]] = defaultdict(list)
-
-        self._initialise_deck(tokens)
-
-    def _initialise_deck(self, tokens: list[Token]) -> None:
-        # Note: tokens come already regrouped for any duplicates from Deck Parser
-        tokens_for_deck = filter(lambda t: t.is_card_token_for_deck, tokens)
-        for token in tokens_for_deck:
-            section = token.deck_section
-            if section is not None:
-                key = section.name
-                self._deck_cards[key].append(token)
-                self._cards_map[token.card.name].append(token)
-
-        unknown_cards = filter(lambda t: t.is_unknown_card, tokens)
-        for token in unknown_cards:
-            self._unknown_cards.append(token)
-
-    def f_group_by_colour(self) -> list[Token]:
-        tokens = list()
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            if not len(self.cards[key]):
-                continue
-            # start with section token
-            tokens.append(
-                Token.DeckSectionToken(section_name=key, count=self.total_cards_in(key))
-            )
-            colours = set(
-                [
-                    tuple(t.card.color_identity)
-                    for t in self.cards[key]
-                    if t.card.color_identity
-                ]
-            )
-            colours = sorted(colours, key=lambda ci: ci[0].value)
-            for color_identity in colours:
-                cards_token_in_group = list(
-                    filter(
-                        lambda t: t.is_card_token_for_deck
-                        and t.card.color_identity
-                        and tuple(t.card.color_identity) == color_identity
-                        and t.card.type_line != "Land",
-                        self.cards[key],
-                    )
-                )
-                total_cards = sum(t.quantity for t in cards_token_in_group)
-                if not total_cards:
-                    continue
-                color_identity_str = "".join(
-                    ["%s" % c.name.lower() for c in color_identity]
-                )
-                mana_colour = Token(
-                    token_type=TokenType.MANA_COLOUR,
-                    text=color_identity_str,
-                    quantity=total_cards,
-                )
-                tokens.append(mana_colour)
-                for card_token in cards_token_in_group:
-                    tokens.append(card_token)
-            # colorless cards
-            colourless_artifacts = list(
-                filter(
-                    lambda t: t.is_card_token_for_deck
-                    and not t.card.color_identity
-                    and t.card.type_line == "Artifact",
-                    self.cards[key],
-                )
-            )
-            total_artifacts = sum(t.quantity for t in colourless_artifacts)
-            if total_artifacts:
-                mana_colour = Token(
-                    token_type=TokenType.MANA_COLOUR,
-                    text="c",
-                    quantity=total_artifacts,
-                )
-                tokens.append(mana_colour)
-                for card_token in colourless_artifacts:
-                    tokens.append(card_token)
-
-            colourless_lands = list(
-                filter(
-                    lambda t: t.is_card_token_for_deck
-                    and not t.card.color_identity
-                    and t.card.type_line == "Land",
-                    self.cards[key],
-                )
-            )
-            total_lands = sum(t.quantity for t in colourless_lands)
-            if total_lands:
-                mana_colour = Token(
-                    token_type=TokenType.MANA_COLOUR, text="land", quantity=total_lands,
-                )
-                tokens.append(mana_colour)
-                for card_token in colourless_lands:
-                    tokens.append(card_token)
-
-        return tokens
-
-    def f_group_by_rarity(self) -> list[Token]:
-        tokens = list()
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            if not len(self.cards[key]):
-                continue
-            # start with section token
-            tokens.append(
-                Token.DeckSectionToken(section_name=key, count=self.total_cards_in(key))
-            )
-            rarities = list(set([t.card.rarity for t in self.cards[key]]))
-            rarities = sorted(rarities, key=lambda r: r.value)
-            for card_rarity in rarities:
-                cards_token_in_group = list(
-                    filter(
-                        lambda t: t.is_card_token_for_deck
-                        and t.card.rarity == card_rarity,
-                        self.cards[key],
-                    )
-                )
-                total_cards = sum(t.quantity for t in cards_token_in_group)
-                rarity_token = Token(
-                    token_type=TokenType.CARD_RARITY,
-                    text=card_rarity.name.title(),
-                    quantity=total_cards,
-                )
-                tokens.append(rarity_token)
-                for card_token in cards_token_in_group:
-                    tokens.append(card_token)
-        return tokens
-
-    def f_group_by_type(self) -> list[Token]:
-        tokens = list()
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            if not len(self.cards[key]):
-                continue
-            # start with section token
-            tokens.append(
-                Token.DeckSectionToken(section_name=key, count=self.total_cards_in(key))
-            )
-            # Spells
-            cards_token_spells = list(
-                filter(
-                    lambda t: t.is_card_token_for_deck and t.card.type_line != "Land",
-                    self.cards[key],
-                )
-            )
-            total_cards = sum(t.quantity for t in cards_token_spells)
-            if not total_cards:
-                continue
-            spell_token = Token(
-                token_type=TokenType.CARD_TYPE, text="Spells", quantity=total_cards,
-            )
-            tokens.append(spell_token)
-            for card_token in cards_token_spells:
-                tokens.append(card_token)
-
-            # Lands
-            cards_token_lands = list(
-                filter(
-                    lambda t: t.is_card_token_for_deck and t.card.type_line == "Land",
-                    self.cards[key],
-                )
-            )
-            total_cards = sum(t.quantity for t in cards_token_lands)
-            if not total_cards:
-                continue
-            land_token = Token(
-                token_type=TokenType.CARD_TYPE, text="Lands", quantity=total_cards,
-            )
-            tokens.append(land_token)
-            for card_token in cards_token_lands:
-                tokens.append(card_token)
-        return tokens
-
-    def f_group_by_cmc(self) -> list[Token]:
-        tokens = list()
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            if not len(self.cards[key]):
-                continue
-            # start with section token
-            tokens.append(
-                Token.DeckSectionToken(section_name=key, count=self.total_cards_in(key))
-            )
-            cmcs = set([t.card.cmc for t in self.cards[key]])
-            cmcs = sorted(cmcs)
-            for cmc in cmcs:
-                cards_token_in_group = list(
-                    filter(
-                        lambda t: t.is_card_token_for_deck and t.card.cmc == cmc,
-                        self.cards[key],
-                    )
-                )
-                total_cards = sum(t.quantity for t in cards_token_in_group)
-                if not total_cards:
-                    continue
-                cmc_token = Token(
-                    token_type=TokenType.CARD_CMC,
-                    text=f"CMC-{int(cmc)}",
-                    quantity=total_cards,
-                )
-                tokens.append(cmc_token)
-                for card_token in cards_token_in_group:
-                    tokens.append(card_token)
-        return tokens
-
-    def f_group_by_type_extended(self) -> list[Token]:
-        tokens = list()
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            if not len(self.cards[key]):
-                continue
-            # start with section token
-            tokens.append(
-                Token.DeckSectionToken(section_name=key, count=self.total_cards_in(key))
-            )
-            all_card_types = [t.card.type_line.lower() for t in self.cards[key]]
-            card_types = list()
-            for ctype in all_card_types:
-                if ctype.startswith("creature"):
-                    card_types.append("creature")
-                elif "enchantment" in ctype:
-                    card_types.append("enchantment")
-                elif "land" in ctype:
-                    card_types.append("land")
-                else:
-                    card_types.append(ctype)
-            card_types = sorted(set(card_types))
-
-            for card_type in card_types:
-                cards_token_in_group = list(
-                    filter(
-                        lambda t: t.is_card_token_for_deck
-                        and card_type in t.card.type_line.lower(),
-                        self.cards[key],
-                    )
-                )
-                total_cards = sum(t.quantity for t in cards_token_in_group)
-                if not total_cards:
-                    continue
-
-                card_type_token = Token(
-                    token_type=TokenType.CARD_TYPE,
-                    text=card_type.lower(),
-                    quantity=total_cards,
-                )
-                tokens.append(card_type_token)
-                for card_token in cards_token_in_group:
-                    tokens.append(card_token)
-        return tokens
-
-    def f_no_group(self) -> list[Token]:
-        tokens = list()
-        for section in (self._mainboard, self._sideboard):
-            key = section.name
-            if not len(self.cards[key]):
-                continue
-            # start with section token
-            section_token = Token.DeckSectionToken(
-                section_name=key, count=self.total_cards_in(key)
-            )
-            tokens.append(section_token)
-            for card_token in self.cards[key]:
-                tokens.append(card_token)
-        return tokens
-
-    def validate(self):
-        errors = list()
-        warnings = list()
-        unknown_cards = list()
-
-        # deck section size validation
-        no_cards_in_md = sum([t.quantity for t in self.cards[self._mainboard.name]])
-        no_cards_in_sb = sum([t.quantity for t in self.cards[self._sideboard.name]])
-
-        md_constraint_ok = self._mainboard.min_size <= no_cards_in_md
-        sb_constraint_ok = no_cards_in_sb <= self._sideboard.max_size
-
-        if not md_constraint_ok:
-            errors.append(MinDeckSizeConstraintError(self._mainboard, no_cards_in_md))
-
-        if not sb_constraint_ok:
-            errors.append(MaxDeckSizeConstraintError(self._sideboard, no_cards_in_sb))
-
-        if no_cards_in_sb == 0:
-            warnings.append(DeckSectionEmpty(deck_section=self._sideboard))
-
-        if no_cards_in_md > 60:
-            warnings.append(
-                TooManyCardsWarning(
-                    deck_section=self._mainboard, current_size=no_cards_in_md
-                )
-            )
-
-        # check card copies
-        for card_name in self._cards_map:
-            if not len(self._cards_map[card_name]):
-                continue
-            c_type = self._cards_map[card_name][0].card.type_line
-            if "land" in c_type.lower():
-                continue
-            no_copies = sum([t.quantity for t in self._cards_map[card_name]])
-            max_no_copies = (
-                1
-                if self._cards_map[card_name][0].token_type == TokenType.RESTRICTED_CARD
-                else 4
-            )
-            if no_copies > max_no_copies:
-                errors.append(
-                    TooManyCardCopies(card_name=card_name, current_number=no_copies)
-                )
-
-        if self._unknown_cards:
-            for token in self._unknown_cards:
-                unknown_cards.append(UnknownCard(card_name=token.text))
-
-        return tuple(errors), tuple(warnings), tuple(unknown_cards)
-
-    def total_cards_in(self, section: str) -> int:
-        if section not in self.cards:
-            return 0
-        return sum([t.quantity for t in self.cards[section]])
-
-    def __len__(self):
-        return self.total_cards_in(self._mainboard.name) + self.total_cards_in(
-            self._sideboard.name
-        )
-
-    def deck_list(self, grouping: str) -> list[Token]:
-        """Generate the deck list (i.e. list of tokens) according to the
-        specified grouping strategy"""
-
-        if not grouping or grouping.upper() not in self.SUPPORTED_GROUPS:
-            grouping = self.NOGROUP
-
-        if grouping == self.NOGROUP:
-            return self.f_no_group()
-        if grouping == self.COLOUR:
-            return self.f_group_by_colour()
-        if grouping == self.RARITY:
-            return self.f_group_by_rarity()
-        if grouping == self.CMC:
-            return self.f_group_by_cmc()
-        if grouping == self.SPELL:
-            return self.f_group_by_type()
-        if grouping == self.TYPE:
-            return self.f_group_by_type_extended()
-        return self.f_no_group()
-
-    def mainboard_to_json(self) -> str:
-        return self._section_to_json(self._mainboard)
-
-    def sideboard_to_json(self) -> str:
-        return self._section_to_json(self._sideboard)
-
-    def _section_to_json(self, section: DeckSection) -> str:
-        cards_to_json = list()
-        for token in self.cards[section.name]:
-            if not token.card:
-                continue
-            cards_to_json.append(
-                {"amount": token.quantity, "card": token.card.to_json()}
-            )
-        return json.dumps(cards_to_json)
-
-    @property
-    def is_valid(self) -> bool:
-        errors, *rest = self.validate()
-        return len(errors) == 0
-
-    @property
-    def name(self):
-        return self._name if self._name else ""
-
-    @property
-    def cards(self):
-        return self._deck_cards
-
-    def cards_in_section(self, section_name: str) -> list[Token]:
-        return self._deck_cards.get(section_name, None)
 
 
 class DeckParser:
@@ -863,7 +389,7 @@ class DeckParser:
     REGRP_CARD = "cardname"
     REGRP_CARDNO = "count"
 
-    REX_CARD_NAME = r"(\[)?(?P<%s>[a-zA-Z0-9&',\.:!\+\"\/\-\s]+)(\])?" % REGRP_CARD
+    REX_CARD_NAME = r"(\[)?(?P<%s>[a-zA-Z0-9&âöûá',\.:!\+\"\/\-\s]+)(\])?" % REGRP_CARD
     REX_SET_CODE = r"(?P<%s>[a-zA-Z0-9_]{2,7})" % REGRP_SET
     REX_COLL_NUMBER = r"(?P<%s>\*?[0-9A-Z]+\S?[A-Z]*)" % REGRP_COLLNR
     REX_CARD_COUNT = r"(?P<%s>[\d]{1,2})(?P<mult>x)?" % REGRP_CARDNO
@@ -1115,7 +641,6 @@ class DeckParser:
     def _get_pivot_release_date(
         reference_tokens: Iterable[Token],
     ) -> Optional[datetime.date]:
-
         card_stats_per_edition = dict()
         set_release_date = dict()
         for t in reference_tokens:
@@ -1161,7 +686,6 @@ class DeckParser:
         return sorted(pivot_candidates)[0]  # oldest set code among pivots
 
     def _harmonise_card_art(self, tokens: list[Token]) -> list[Token]:
-
         optimised_tokens = list()
         card_tokens = list(filter(lambda t: t.is_card_token, tokens))
         deck_sections_in_list = set([t.deck_section.name for t in card_tokens])
@@ -1214,7 +738,8 @@ class DeckParser:
                 )
                 if len(cards_candidate):
                     alternate_card = cards_candidate[0]
-                    replace_token = Token.LegalCardToken(
+                    replace_token = Token.CardToken(
+                        token_type=token.token_type,
                         card=alternate_card,
                         count=token.quantity,
                         card_has_setcode=True,
@@ -1273,7 +798,8 @@ class DeckParser:
             total_quantity = sum(
                 [t.quantity for t in card_tokens_map[section_card_key]]
             )
-            new_card_token = Token.LegalCardToken(
+            new_card_token = Token.CardToken(
+                token_type=token.token_type,
                 card=token.card,
                 count=total_quantity,
                 deck_section=token.deck_section,
@@ -1287,7 +813,6 @@ class DeckParser:
     def _parse_line(
         self, line: str, deck_section: DeckSection
     ) -> tuple[Optional[Token], DeckSection]:
-
         if not line or not line.strip():
             return None, deck_section
         ref_line = line.strip().replace(chr(8216), "'").replace(chr(8217), "'")
@@ -1310,6 +835,7 @@ class DeckParser:
             return None, deck_section  # Just skip this line
 
         token, deck_section = self._parse_card_token(line, deck_section)
+
         if token:
             return token, deck_section
         token = self._parse_non_card_token(line)
@@ -1357,11 +883,12 @@ class DeckParser:
                 else current_deck_section
             )
 
-            if self._db.in_banned_list(card_name=card_name):
-                return (
-                    Token.BannedCardToken(card_name=card_name, count=card_amount),
-                    card_deck_section,
-                )
+            # Exception to handle special case
+            if (
+                self._db.in_banned_list(card_name=card_name)
+                and "flash of insight" in line.lower()
+            ):
+                continue
 
             if card_name not in self._db:
                 if amount:
@@ -1436,11 +963,11 @@ class DeckParser:
                         card_deck_section,
                     )
                 return (
-                    Token.LegalCardToken(
+                    self._new_card_token(
                         card=matched_card,
                         count=card_amount,
                         deck_section=card_deck_section,
-                        card_has_setcode=True,
+                        has_set_code=True,
                         is_foil=is_foil,
                     ),
                     card_deck_section,
@@ -1451,17 +978,40 @@ class DeckParser:
             # and exact card will be returned based on the Preferred sets specified in the DB
             card = next(self._db.lookup(card_name=card_name, unique=True))
             return (
-                Token.LegalCardToken(
+                self._new_card_token(
                     card=card,
                     count=card_amount,
                     deck_section=card_deck_section,
-                    card_has_setcode=False,
+                    has_set_code=False,
                     is_foil=is_foil,
                 ),
                 card_deck_section,
             )
 
         return unknown_card_token, current_deck_section
+
+    def _new_card_token(
+        self,
+        card: Card,
+        count: int,
+        deck_section: DeckSection,
+        has_set_code: bool,
+        is_foil: bool,
+    ):
+        if self._db.in_banned_list(card_name=card.name):
+            token_type = TokenType.BANNED_CARD
+        elif self._db.in_restricted_list(card_name=card.name):
+            token_type = TokenType.RESTRICTED_CARD
+        else:
+            token_type = TokenType.LEGAL_CARD
+        return Token.CardToken(
+            token_type=token_type,
+            card=card,
+            count=count,
+            deck_section=deck_section,
+            card_has_setcode=has_set_code,
+            is_foil=is_foil,
+        )
 
     # ================================
     # PARSE CARD TOKEN UTILITY METHODS
@@ -1675,14 +1225,3 @@ class DeckParser:
         if match:
             return match.group(self.REGRP_DECKNAME)
         return ""
-
-
-if __name__ == "__main__":
-    import json
-
-    db = json.load(open("data/premodern_cards.json"))
-    from data import ScryfallDB
-
-    cards = ScryfallDB(db)
-    parser = DeckParser(cards)
-    parser.parse_card_list(["20 Island [MMQ] (F)"])
